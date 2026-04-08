@@ -1370,20 +1370,38 @@ function generateDungeon(floorNum) {
             }
         }
         if(!room.hasShop&&Math.random()<0.35){let t=cloneItem(pick(ITEM_TYPES));t=rollAffix(t);t.x=randInt(x+1,x+w-2);t.y=randInt(y+1,y+h-2);room.items.push(t)}
-        if(!room.hasShop&&Math.random()<0.3){
-            const ct=pick(["normal","normal","normal","locked","trapped"]);
-            let ci=cloneItem(pick(CHEST_ITEMS));ci=rollAffix(ci);
-            // Chance for set item in chests on floor 5+
-            const si=rollSetItem(floorNum);if(si)ci=si;
-            // Rare chance for a torch in the chest
-            if(Math.random()<0.08)ci=rollTorchDrop(floorNum);
-            room.chests.push({type:ct,item:ci,opened:false,x:randInt(x+1,x+w-2),y:randInt(y+1,y+h-2)});
-        }
         if(Math.random()<0.2){
             let t;
             if(Math.random()<0.1){t=rollTorchDrop(floorNum)}
             else t=cloneItem(pick(HIDDEN_ITEMS));
             t.x=randInt(x+1,x+w-2);t.y=randInt(y+1,y+h-2);t.discovered=false;room.hiddenItems.push(t);
+        }
+    }
+    // ===== Per-floor chest: at most one chest per floor =====
+    // Base 60% chance, with a pity timer that guarantees a chest after 2
+    // chestless floors so the player is never starved.
+    {
+        const dry=(game&&typeof game.chestlessFloors==='number')?game.chestlessFloors:0;
+        const pityForced=dry>=2;
+        const spawn=pityForced||Math.random()<0.6;
+        if(spawn){
+            // Pick an eligible room (no shop, no boss, has interior space)
+            const eligible=rooms.filter(r=>!r.hasShop&&!r.isBossRoom&&r.w>2&&r.h>2&&r!==rooms[0]);
+            const target=eligible.length?pick(eligible):null;
+            if(target){
+                const ct=pick(["normal","normal","normal","locked","trapped"]);
+                let ci=cloneItem(pick(CHEST_ITEMS));ci=rollAffix(ci);
+                const si=rollSetItem(floorNum);if(si)ci=si;
+                if(Math.random()<0.08)ci=rollTorchDrop(floorNum);
+                target.chests.push({type:ct,item:ci,opened:false,
+                    x:randInt(target.x+1,target.x+target.w-2),
+                    y:randInt(target.y+1,target.y+target.h-2)});
+                if(game)game.chestlessFloors=0;
+            } else if(game){
+                game.chestlessFloors=dry+1;
+            }
+        } else if(game){
+            game.chestlessFloors=dry+1;
         }
     }
     if(!isBossFloor)grid[lastRoom.cy][lastRoom.cx]='>';
@@ -1528,6 +1546,7 @@ class GameState {
         this.currentMutator=null;
         this.analytics={kills:0,goldEarned:0,goldSpent:0,potionsUsed:0,itemsFound:0,floorsExplored:0,specialRoomsVisited:0,eliteKills:0};
         this._usedShrineNames=new Set();
+        this.chestlessFloors=0;
         if(!skipFloor)this.newFloor();
     }
     newFloor(){
@@ -3356,6 +3375,7 @@ function saveGame(){
         currentMutator:game.currentMutator,
         analytics:game.analytics,
         usedShrineNames:[...(game._usedShrineNames||[])],
+        chestlessFloors:game.chestlessFloors||0,
     };
     localStorage.setItem('dotf_save',JSON.stringify(data));
     sfxSave();addMsg("Game saved!",'hp');renderAll();
@@ -3395,6 +3415,7 @@ function loadGame(){
         game.currentMutator=data.currentMutator||null;
         game.analytics=data.analytics||game.analytics;
         game._usedShrineNames=new Set(data.usedShrineNames||[]);
+        game.chestlessFloors=data.chestlessFloors||0;
         game.rooms=data.rooms.map(rd=>{
             const r=new Room(rd.x,rd.y,rd.w,rd.h);
             Object.assign(r,rd);
