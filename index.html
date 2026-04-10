@@ -1021,14 +1021,14 @@ function getArmorWeight(item){
     if(!item||item.type!=='armor')return null;
     if(item.armorWeight)return item.armorWeight;
     const n=item.name.toLowerCase();
-    // Cloth — check first (specific keywords)
+    // Cloth — robes, shrouds, vestments
     if(/robe|vestment|shroud|ink-stained|cloth|circlet|silk/.test(n))return 'cloth';
-    // Plate — heavy body armor
+    // Plate — heavy metal armor
     if(/plate|plating/.test(n))return 'plate';
-    // Mail — medium metal
-    if(/chain|mail|mithril|steel|iron|reinforced|gear-tooth|dragon|crown|coif|colossus/.test(n))return 'mail';
-    // Leather — light
-    if(/leather|hide|pelt|tattered|worn|wooden|shadow|pilgrim|silent|hidden|buckler|hood|cloak|cap/.test(n))return 'leather';
+    // Mail — medium metal armor
+    if(/chain|mail|mithril|steel|iron|reinforced|gear-tooth|dragon|crown|coif|colossus|bolted|rattling|stomper|aegis|bonecage|deathstep/.test(n))return 'mail';
+    // Leather — light armor
+    if(/leather|hide|pelt|flayed|tattered|worn|wooden|shadow|pilgrim|silent|stitched|scalp|hood|cloak|cap|corpse-walk|moth-eaten|bark/.test(n))return 'leather';
     return null; // universal (rings, amulets, etc.)
 }
 
@@ -1183,30 +1183,30 @@ const BOSSES = {
 };
 
 const ITEM_TYPES = [
-    {name:"Health Potion",type:"heal",value:8,desc:"Restores 8 HP"},
-    {name:"Big Health Potion",type:"heal",value:18,desc:"Restores 18 HP"},
-    {name:"Rusty Sword",type:"weapon",value:2,desc:"+2 ATK",slot:"weapon"},
-    {name:"Wooden Buckler",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},
-    {name:"Leather Cap",type:"armor",value:1,desc:"+1 DEF",slot:"head"},
-    {name:"Worn Greaves",type:"armor",value:1,desc:"+1 DEF",slot:"legs"},
-    {name:"Worn Boots",type:"armor",value:1,desc:"+1 DEF",slot:"feet"},
-    {name:"Copper Ring",type:"ring_atk",value:1,desc:"+1 ATK",slot:"ring"},
+    {name:"Vial of Clotted Blood",type:"heal",value:8,desc:"Restores 8 HP"},
+    {name:"Flask of Marrow Broth",type:"heal",value:18,desc:"Restores 18 HP"},
+    {name:"Notched Cleaver",type:"weapon",value:2,desc:"+2 ATK",slot:"weapon"},
+    {name:"Hollow Bark Ward",type:"armor",value:2,desc:"+2 DEF",slot:"offhand",armorWeight:'leather'},
+    {name:"Scalp-stitched Hood",type:"armor",value:1,desc:"+1 DEF",slot:"head",armorWeight:'leather'},
+    {name:"Moth-eaten Leggings",type:"armor",value:1,desc:"+1 DEF",slot:"legs",armorWeight:'leather'},
+    {name:"Corpse-walker Boots",type:"armor",value:1,desc:"+1 DEF",slot:"feet",armorWeight:'leather'},
+    {name:"Tarnished Finger Ring",type:"ring_atk",value:1,desc:"+1 ATK",slot:"ring"},
     {name:"Bone Amulet",type:"amulet_hp",value:8,desc:"+8 Max HP",slot:"amulet"},
-    {name:"Elixir of Strength",type:"buff_attack",value:3,desc:"+3 ATK permanently"},
-    {name:"Scroll of Protection",type:"buff_defense",value:2,desc:"+2 DEF permanently"},
-    {name:"Scroll of Lightning",type:"scroll",value:15,desc:"Deals 15 damage"},
-    {name:"Scroll of Obliteration",type:"scroll",value:40,desc:"Deals 40 damage"},
+    {name:"Elixir of Sinew",type:"buff_attack",value:3,desc:"+3 ATK permanently"},
+    {name:"Warding Glyph",type:"buff_defense",value:2,desc:"+2 DEF permanently"},
+    {name:"Scroll of Shattered Nerves",type:"scroll",value:15,desc:"Deals 15 damage"},
+    {name:"Scroll of Unmaking",type:"scroll",value:40,desc:"Deals 40 damage"},
 ];
 
 const CHEST_ITEMS = [
-    {name:"Gold Coins",type:"gold",value:25,desc:"25 gold"},{name:"Gold Hoard",type:"gold",value:75,desc:"75 gold!"},
-    {name:"Ruby Necklace",type:"gold",value:50,desc:"50 gold"},{name:"Health Potion",type:"heal",value:12,desc:"Restores 12 HP"},
-    {name:"Fine Sword",type:"weapon",value:3,desc:"+3 ATK",slot:"weapon"},{name:"Reinforced Armor",type:"armor",value:3,desc:"+3 DEF",slot:"chest"},
-    {name:"Iron Helm",type:"armor",value:2,desc:"+2 DEF",slot:"head"},{name:"Chain Leggings",type:"armor",value:2,desc:"+2 DEF",slot:"legs"},
-    {name:"Reinforced Buckler",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},{name:"Silver Ring",type:"ring_def",value:2,desc:"+2 DEF",slot:"ring"},
-    {name:"Jade Amulet",type:"amulet_hp",value:12,desc:"+12 Max HP",slot:"amulet"},
-    {name:"Iron Boots",type:"armor",value:2,desc:"+2 DEF",slot:"feet"},
-    {name:"Elixir of Vitality",type:"buff_hp",value:10,desc:"+10 max HP"},{name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests"},
+    {name:"Grave Coins",type:"gold",value:25,desc:"25 gold"},{name:"Burial Offerings",type:"gold",value:75,desc:"75 gold!"},
+    {name:"Bloodstone Necklace",type:"gold",value:50,desc:"50 gold"},{name:"Vial of Clotted Blood",type:"heal",value:12,desc:"Restores 12 HP"},
+    {name:"Bone-hilted Blade",type:"weapon",value:3,desc:"+3 ATK",slot:"weapon"},{name:"Riveted Mail Hauberk",type:"armor",value:3,desc:"+3 DEF",slot:"chest"},
+    {name:"Dented Iron Helm",type:"armor",value:2,desc:"+2 DEF",slot:"head"},{name:"Rusted Chain Leggings",type:"armor",value:2,desc:"+2 DEF",slot:"legs"},
+    {name:"Bolted Iron Ward",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},{name:"Pallid Silver Ring",type:"ring_def",value:2,desc:"+2 DEF",slot:"ring"},
+    {name:"Jade Death-eye Amulet",type:"amulet_hp",value:12,desc:"+12 Max HP",slot:"amulet"},
+    {name:"Iron-shod Treads",type:"armor",value:2,desc:"+2 DEF",slot:"feet"},
+    {name:"Elixir of Stolen Breath",type:"buff_hp",value:10,desc:"+10 max HP"},{name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests"},
 ];
 
 // ===== Kill-drop system: enemy-type-tiered loot pools =====
@@ -1223,53 +1223,53 @@ const ENEMY_CATEGORY = {
 };
 const DROP_POOLS = {
     beast:[
-        {name:"Health Potion",type:"heal",value:8,desc:"Restores 8 HP"},
-        {name:"Health Potion",type:"heal",value:8,desc:"Restores 8 HP"},
-        {name:"Tattered Pelt",type:"armor",value:1,desc:"+1 DEF",slot:"chest"},
+        {name:"Vial of Clotted Blood",type:"heal",value:8,desc:"Restores 8 HP"},
+        {name:"Vial of Clotted Blood",type:"heal",value:8,desc:"Restores 8 HP"},
+        {name:"Flayed Hide Wrap",type:"armor",value:1,desc:"+1 DEF",slot:"chest"},
         {name:"Sharpened Fang",type:"weapon",value:2,desc:"+2 ATK",slot:"weapon"},
-        {name:"Stolen Trinket",type:"gold",value:15,desc:"15 gold"},
+        {name:"Gnawed Trinket",type:"gold",value:15,desc:"15 gold"},
     ],
     humanoid:[
-        {name:"Rusty Sword",type:"weapon",value:2,desc:"+2 ATK",slot:"weapon"},
-        {name:"Iron Dagger",type:"weapon",value:3,desc:"+3 ATK",slot:"weapon"},
-        {name:"Leather Armor",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
-        {name:"Wooden Buckler",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},
-        {name:"Leather Cap",type:"armor",value:1,desc:"+1 DEF",slot:"head"},
-        {name:"Worn Boots",type:"armor",value:1,desc:"+1 DEF",slot:"feet"},
+        {name:"Notched Cleaver",type:"weapon",value:2,desc:"+2 ATK",slot:"weapon"},
+        {name:"Blackened Shiv",type:"weapon",value:3,desc:"+3 ATK",slot:"weapon"},
+        {name:"Stitched Leather Husk",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
+        {name:"Hollow Bark Ward",type:"armor",value:2,desc:"+2 DEF",slot:"offhand",armorWeight:'leather'},
+        {name:"Scalp-stitched Hood",type:"armor",value:1,desc:"+1 DEF",slot:"head",armorWeight:'leather'},
+        {name:"Corpse-walker Boots",type:"armor",value:1,desc:"+1 DEF",slot:"feet",armorWeight:'leather'},
         {name:"Bandit's Purse",type:"gold",value:25,desc:"25 gold"},
-        {name:"Health Potion",type:"heal",value:10,desc:"Restores 10 HP"},
+        {name:"Vial of Clotted Blood",type:"heal",value:10,desc:"Restores 10 HP"},
         {name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests"},
     ],
     undead:[
         {name:"Bone Amulet",type:"amulet_hp",value:8,desc:"+8 Max HP",slot:"amulet"},
-        {name:"Grave Dust",type:"scroll",value:12,desc:"12 damage"},
+        {name:"Handful of Grave Dust",type:"scroll",value:12,desc:"12 damage"},
         {name:"Cracked Femur",type:"weapon",value:3,desc:"+3 ATK",slot:"weapon"},
-        {name:"Shroud Tatters",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
+        {name:"Grave Shroud Tatters",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
         {name:"Rotted Copper",type:"gold",value:18,desc:"18 gold"},
         {name:"Soul Fragment",type:"heal",value:15,desc:"Restores 15 HP"},
     ],
     arcane:[
-        {name:"Scroll of Lightning",type:"scroll",value:15,desc:"15 damage"},
-        {name:"Scroll of Fire",type:"scroll",value:20,desc:"20 damage"},
+        {name:"Scroll of Shattered Nerves",type:"scroll",value:15,desc:"15 damage"},
+        {name:"Scroll of Black Flame",type:"scroll",value:20,desc:"20 damage"},
         {name:"Mana Vial",type:"heal",value:12,desc:"Restores 12 HP"},
-        {name:"Enchanted Band",type:"ring_atk",value:2,desc:"+2 ATK",slot:"ring"},
+        {name:"Whispering Band",type:"ring_atk",value:2,desc:"+2 ATK",slot:"ring"},
         {name:"Ink-stained Robe",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
         {name:"Arcane Dust",type:"gold",value:30,desc:"30 gold"},
     ],
     demon:[
         {name:"Cinderstone Ring",type:"ring_atk",value:3,desc:"+3 ATK",slot:"ring"},
-        {name:"Infernal Blade",type:"weapon",value:4,desc:"+4 ATK",slot:"weapon"},
+        {name:"Tongue of the Pit",type:"weapon",value:4,desc:"+4 ATK",slot:"weapon"},
         {name:"Brimstone Vial",type:"scroll",value:25,desc:"25 damage"},
         {name:"Hellfire Core",type:"buff_attack",value:2,desc:"+2 ATK permanently"},
         {name:"Molten Coin",type:"gold",value:40,desc:"40 gold"},
     ],
     construct:[
-        {name:"Iron Plating",type:"armor",value:3,desc:"+3 DEF",slot:"chest"},
-        {name:"Steel Greaves",type:"armor",value:2,desc:"+2 DEF",slot:"legs"},
-        {name:"Gear-tooth Shield",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},
+        {name:"Rusted Iron Plate",type:"armor",value:3,desc:"+3 DEF",slot:"chest"},
+        {name:"Blackened Steel Greaves",type:"armor",value:2,desc:"+2 DEF",slot:"legs"},
+        {name:"Gear-tooth Bulwark",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},
         {name:"Core Shard",type:"buff_defense",value:2,desc:"+2 DEF permanently"},
         {name:"Polished Gemstone",type:"gold",value:35,desc:"35 gold"},
-        {name:"Silver Ring",type:"ring_def",value:2,desc:"+2 DEF",slot:"ring"},
+        {name:"Pallid Silver Ring",type:"ring_def",value:2,desc:"+2 DEF",slot:"ring"},
     ],
 };
 function rollKillDrop(enemy,floorNum){
@@ -1321,12 +1321,12 @@ function showLootToast(item,sourceName,isElite){
 }
 
 const HIDDEN_ITEMS = [
-    {name:"Ancient Coin",type:"gold",value:40,desc:"40 gold"},{name:"Hidden Dagger",type:"weapon",value:4,desc:"+4 ATK",slot:"weapon"},
-    {name:"Secret Scroll",type:"scroll",value:25,desc:"25 damage"},{name:"Dusty Potion",type:"heal",value:14,desc:"Restores 14 HP"},
-    {name:"Forgotten Ring",type:"ring_atk",value:2,desc:"+2 ATK",slot:"ring"},{name:"Buried Gem",type:"gold",value:60,desc:"60 gold"},
+    {name:"Entombed Coin",type:"gold",value:40,desc:"40 gold"},{name:"Whittled Rib-knife",type:"weapon",value:4,desc:"+4 ATK",slot:"weapon"},
+    {name:"Scroll of Whispered Sins",type:"scroll",value:25,desc:"25 damage"},{name:"Dusty Vial",type:"heal",value:14,desc:"Restores 14 HP"},
+    {name:"Ring of the Nameless",type:"ring_atk",value:2,desc:"+2 ATK",slot:"ring"},{name:"Buried Gem",type:"gold",value:60,desc:"60 gold"},
     {name:"Shadow Amulet",type:"amulet_hp",value:15,desc:"+15 Max HP",slot:"amulet"},
-    {name:"Hidden Guard",type:"armor",value:3,desc:"+3 DEF",slot:"offhand"},
-    {name:"Silent Treads",type:"armor",value:2,desc:"+2 DEF",slot:"feet"},
+    {name:"Shadow-etched Ward",type:"armor",value:3,desc:"+3 DEF",slot:"offhand",armorWeight:'leather'},
+    {name:"Silent Treads",type:"armor",value:2,desc:"+2 DEF",slot:"feet",armorWeight:'leather'},
 ];
 
 const ROOM_DESCS = [
@@ -1482,11 +1482,11 @@ const INTENT_TEMPLATES = {
 function getShopItems(floor) {
     const tier = Math.min(Math.floor(floor / 5), 4);
     const shops = [
-        [{name:"Health Potion",type:"heal",value:10,desc:"Restores 10 HP",cost:18},{name:"Iron Dagger",type:"weapon",value:2,desc:"+2 ATK",cost:30,slot:"weapon"},{name:"Leather Armor",type:"armor",value:1,desc:"+1 DEF",cost:25,slot:"chest"},{name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests",cost:20},{name:"Leather Cap",type:"armor",value:1,desc:"+1 DEF (Head)",cost:22,slot:"head"},{name:"Worn Boots",type:"armor",value:1,desc:"+1 DEF (Feet)",cost:20,slot:"feet"}],
-        [{name:"Big Health Potion",type:"heal",value:20,desc:"Restores 20 HP",cost:35},{name:"Steel Sword",type:"weapon",value:3,desc:"+3 ATK",cost:55,slot:"weapon"},{name:"Chain Mail",type:"armor",value:2,desc:"+2 DEF",cost:50,slot:"chest"},{name:"Iron Guard",type:"armor",value:1,desc:"+1 DEF (Offhand)",cost:40,slot:"offhand"},{name:"Iron Boots",type:"armor",value:1,desc:"+1 DEF (Feet)",cost:35,slot:"feet"},{name:"Scroll of Lightning",type:"scroll",value:20,desc:"20 damage",cost:40},{name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests",cost:22}],
-        [{name:"Greater Health Potion",type:"heal",value:35,desc:"Restores 35 HP",cost:55},{name:"Enchanted Blade",type:"weapon",value:5,desc:"+5 ATK",cost:110,slot:"weapon"},{name:"Plate Armor",type:"armor",value:4,desc:"+4 DEF",cost:100,slot:"chest"},{name:"Steel Greaves",type:"armor",value:2,desc:"+2 DEF (Legs)",cost:65,slot:"legs"},{name:"Steel Guard",type:"armor",value:3,desc:"+3 DEF (Offhand)",cost:80,slot:"offhand"},{name:"Steel Boots",type:"armor",value:2,desc:"+2 DEF (Feet)",cost:60,slot:"feet"},{name:"Ruby Ring",type:"ring_atk",value:2,desc:"+2 ATK",cost:85,slot:"ring"},{name:"Extra Life",type:"life",value:1,desc:"+1 Life!",cost:250}],
-        [{name:"Supreme Health Potion",type:"heal",value:50,desc:"Restores 50 HP",cost:85},{name:"Mithril Sword",type:"weapon",value:7,desc:"+7 ATK",cost:175,slot:"weapon"},{name:"Mithril Armor",type:"armor",value:6,desc:"+6 DEF",cost:160,slot:"chest"},{name:"Mithril Guard",type:"armor",value:4,desc:"+4 DEF (Offhand)",cost:140,slot:"offhand"},{name:"Mithril Boots",type:"armor",value:3,desc:"+3 DEF (Feet)",cost:120,slot:"feet"},{name:"Amulet of Vitality",type:"amulet_hp",value:15,desc:"+15 Max HP",cost:130,slot:"amulet"},{name:"Extra Life",type:"life",value:1,desc:"+1 Life!",cost:250}],
-        [{name:"Elixir of the Gods",type:"heal",value:80,desc:"Restores 80 HP",cost:150},{name:"Legendary Blade",type:"weapon",value:10,desc:"+10 ATK",cost:320,slot:"weapon"},{name:"Dragon Armor",type:"armor",value:8,desc:"+8 DEF",cost:300,slot:"chest"},{name:"Dragon Guard",type:"armor",value:5,desc:"+5 DEF (Offhand)",cost:240,slot:"offhand"},{name:"Dragon Boots",type:"armor",value:4,desc:"+4 DEF (Feet)",cost:200,slot:"feet"},{name:"Sapphire Ring",type:"ring_def",value:3,desc:"+3 DEF",cost:195,slot:"ring"},{name:"Extra Life",type:"life",value:1,desc:"+1 Life!",cost:300}],
+        [{name:"Vial of Clotted Blood",type:"heal",value:10,desc:"Restores 10 HP",cost:18},{name:"Blackened Shiv",type:"weapon",value:2,desc:"+2 ATK",cost:30,slot:"weapon"},{name:"Stitched Leather Husk",type:"armor",value:1,desc:"+1 DEF",cost:25,slot:"chest"},{name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests",cost:20},{name:"Scalp-stitched Hood",type:"armor",value:1,desc:"+1 DEF (Head)",cost:22,slot:"head",armorWeight:'leather'},{name:"Corpse-walker Boots",type:"armor",value:1,desc:"+1 DEF (Feet)",cost:20,slot:"feet",armorWeight:'leather'}],
+        [{name:"Flask of Marrow Broth",type:"heal",value:20,desc:"Restores 20 HP",cost:35},{name:"Mourning Blade",type:"weapon",value:3,desc:"+3 ATK",cost:55,slot:"weapon"},{name:"Rattling Chain Mail",type:"armor",value:2,desc:"+2 DEF",cost:50,slot:"chest"},{name:"Bolted Iron Ward",type:"armor",value:1,desc:"+1 DEF (Offhand)",cost:40,slot:"offhand"},{name:"Iron-shod Treads",type:"armor",value:1,desc:"+1 DEF (Feet)",cost:35,slot:"feet"},{name:"Scroll of Shattered Nerves",type:"scroll",value:20,desc:"20 damage",cost:40},{name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests",cost:22}],
+        [{name:"Elixir of Worm's Blood",type:"heal",value:35,desc:"Restores 35 HP",cost:55},{name:"Weeping Edge",type:"weapon",value:5,desc:"+5 ATK",cost:110,slot:"weapon"},{name:"Hollow Plate Armor",type:"armor",value:4,desc:"+4 DEF",cost:100,slot:"chest"},{name:"Blackened Steel Greaves",type:"armor",value:2,desc:"+2 DEF (Legs)",cost:65,slot:"legs"},{name:"Etched Steel Ward",type:"armor",value:3,desc:"+3 DEF (Offhand)",cost:80,slot:"offhand"},{name:"Steel Stompers",type:"armor",value:2,desc:"+2 DEF (Feet)",cost:60,slot:"feet"},{name:"Blood-drop Ring",type:"ring_atk",value:2,desc:"+2 ATK",cost:85,slot:"ring"},{name:"Extra Life",type:"life",value:1,desc:"+1 Life!",cost:250}],
+        [{name:"Ichor of the Deep",type:"heal",value:50,desc:"Restores 50 HP",cost:85},{name:"Pale Reaper",type:"weapon",value:7,desc:"+7 ATK",cost:175,slot:"weapon"},{name:"Mithril Bonecage",type:"armor",value:6,desc:"+6 DEF",cost:160,slot:"chest"},{name:"Mithril Ghost Ward",type:"armor",value:4,desc:"+4 DEF (Offhand)",cost:140,slot:"offhand"},{name:"Mithril Deathsteps",type:"armor",value:3,desc:"+3 DEF (Feet)",cost:120,slot:"feet"},{name:"Amulet of Stolen Breath",type:"amulet_hp",value:15,desc:"+15 Max HP",cost:130,slot:"amulet"},{name:"Extra Life",type:"life",value:1,desc:"+1 Life!",cost:250}],
+        [{name:"Ichor of the Forgotten",type:"heal",value:80,desc:"Restores 80 HP",cost:150},{name:"The Oathbreaker",type:"weapon",value:10,desc:"+10 ATK",cost:320,slot:"weapon"},{name:"Flayed Dragon Plate",type:"armor",value:8,desc:"+8 DEF",cost:300,slot:"chest"},{name:"Dragon Bone Aegis",type:"armor",value:5,desc:"+5 DEF (Offhand)",cost:240,slot:"offhand"},{name:"Dragon Claw Treads",type:"armor",value:4,desc:"+4 DEF (Feet)",cost:200,slot:"feet"},{name:"Frostbitten Ring",type:"ring_def",value:3,desc:"+3 DEF",cost:195,slot:"ring"},{name:"Extra Life",type:"life",value:1,desc:"+1 Life!",cost:300}],
     ];
     // Add a random trinket to tier 2+ shops
     if(tier>=2){
