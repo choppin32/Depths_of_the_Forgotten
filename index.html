@@ -229,6 +229,35 @@ body {
     user-select: none;
 }
 #action-buttons button:active { background: #2a2a4e; border-color: #5ff; }
+#btn-rest.rest-available {
+    background: linear-gradient(180deg, #2a1a00, #3a2200);
+    color: #fc0;
+    border-color: #fc0;
+    text-shadow: 0 0 6px #fa0;
+    box-shadow: 0 0 12px rgba(255,204,0,0.5), inset 0 0 8px rgba(255,204,0,0.15);
+    animation: rest-pulse 1.6s ease-in-out infinite;
+}
+#btn-rest.rest-disabled { opacity: 0.45; }
+@keyframes rest-pulse {
+    0%,100% { box-shadow: 0 0 12px rgba(255,204,0,0.4), inset 0 0 8px rgba(255,204,0,0.15); }
+    50%     { box-shadow: 0 0 22px rgba(255,204,0,0.8), inset 0 0 14px rgba(255,204,0,0.25); }
+}
+#rest-banner {
+    position: fixed; top: 48px; left: 50%; transform: translateX(-50%);
+    z-index: 9998; pointer-events: none;
+    background: linear-gradient(180deg, rgba(15,5,0,0.95), rgba(30,15,0,0.95));
+    border: 1px solid #a80; border-radius: 4px;
+    color: #fc0; font-family: monospace; font-size: 12px;
+    padding: 6px 14px; text-shadow: 0 0 4px #a60;
+    box-shadow: 0 0 14px rgba(255,170,0,0.35);
+    display: none;
+    animation: rest-banner-pulse 2.2s ease-in-out infinite;
+}
+#rest-banner.visible { display: block; }
+@keyframes rest-banner-pulse {
+    0%,100% { opacity: 0.85; }
+    50%     { opacity: 1; }
+}
 
 /* Menu / overlay screens */
 .screen-overlay {
@@ -744,6 +773,7 @@ body {
 
 <!-- Loot drop toast container -->
 <div id="loot-toast-container"></div>
+<div id="rest-banner">You could catch your breath here. Press <b>R</b> or tap <b>Rest</b>.</div>
 
 <!-- Game UI -->
 <div id="game-container" style="display:none">
@@ -787,6 +817,7 @@ body {
             <button onclick="searchRoom()">Search</button>
             <button onclick="grabHidden()">Grab</button>
             <button onclick="openBestiary()">Book</button>
+            <button id="btn-rest" onclick="tryRest()">Rest</button>
             <button onclick="saveGame()">Save</button>
             <button onclick="openLegend()">?</button>
         </div>
@@ -1733,10 +1764,13 @@ class GameState {
         this.analytics={kills:0,goldEarned:0,goldSpent:0,potionsUsed:0,itemsFound:0,floorsExplored:0,specialRoomsVisited:0,eliteKills:0};
         this._usedShrineNames=new Set();
         this.chestlessFloors=0;
+        this.restedRooms=new Set();
         if(!skipFloor)this.newFloor();
     }
     newFloor(){
         this.currentMutator=null;
+        this.restedRooms=new Set();
+        pendingRestRoom=null;
         if(!BOSSES[this.player.floor]&&Math.random()<0.2){
             this.currentMutator=pick(FLOOR_MUTATORS);
         }
@@ -1862,7 +1896,16 @@ function renderHud(){
     document.getElementById('lh-floor').innerHTML=floorText;
 }
 
-function renderAll(){renderMap();renderHud();renderMessages()}
+function renderRest(){
+    const btn=document.getElementById('btn-rest');
+    const banner=document.getElementById('rest-banner');
+    if(!btn)return;
+    const avail=canRestHere();
+    btn.classList.toggle('rest-available',avail);
+    btn.classList.toggle('rest-disabled',!avail);
+    if(banner)banner.classList.toggle('visible',avail);
+}
+function renderAll(){renderMap();renderHud();renderMessages();renderRest()}
 
 // ========== ITEM LOGIC ==========
 function applyItem(item,enemy=null){
@@ -2171,6 +2214,7 @@ function movePlayer(dx,dy){
     p.x=nx;p.y=ny;sfxStep();
 
     const room=game.getCurrentRoom();
+    if(pendingRestRoom&&pendingRestRoom!==room)pendingRestRoom=null;
     if(room&&!room.visited){
         room.visited=true;addMsg(room.desc,'dim');
         // V1.1: Special room trigger
@@ -2611,6 +2655,157 @@ function useAbility(enemy){
     return false;
 }
 
+// ========== REST SYSTEM ==========
+// After any combat ends, the player may rest in the current room.
+// One rest per room. Rest is never free — the dungeon is watching.
+let pendingRestRoom=null;
+
+const REST_OUTCOMES=[
+    {id:'uneventful',weight:40,quality:3,
+        title:'🕯 Uneventful',
+        flavor:'You lean against the wall. Something in the next room stops moving.',
+        apply:(p)=>{const h=Math.floor(p.maxHp*0.25);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`You recover ${h} HP.`,'hp')}},
+    {id:'light_sleep',weight:25,quality:4,
+        title:'🩸 Light sleep',
+        flavor:'You wake up. Your torch is shorter than you remember.',
+        apply:(p)=>{const h=Math.floor(p.maxHp*0.40);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`You recover ${h} HP.`,'hp');
+            // Burn a floor of starter-torch fuel if equipped
+            const t=p.equipment&&p.equipment.torch;
+            if(t&&t.floorsLeft!==undefined&&t.floorsLeft>0){t.floorsLeft=Math.max(0,t.floorsLeft-1);addMsg("Your torch burned while you slept.",'dim')}
+        }},
+    {id:'watched',weight:15,quality:2,
+        title:'👁 Watched',
+        flavor:'You feel eyes. When you turn, there is a fresh handprint on the wall beside your head.',
+        apply:(p)=>{const h=Math.floor(p.maxHp*0.15);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`You recover ${h} HP.`,'hp');
+            // Spawn an extra enemy in the current room
+            const room=game.getCurrentRoom();if(room){
+                const floorNum=p.floor;
+                const mi=Math.min(ENEMY_TYPES.length-1,2+Math.floor(floorNum/2));
+                const t=pick(ENEMY_TYPES.slice(0,mi+1));const sc=1+floorNum*0.18;
+                const hp2=Math.floor(t.hp*sc),atk2=Math.floor(t.attack*sc),xp2=Math.floor(t.xp*sc);
+                const spawn={name:t.name,baseName:t.name,hp:hp2,maxHp:hp2,attack:atk2,xp:xp2,char:t.char,desc:t.desc,isBoss:false,isElite:false,role:ENEMY_ROLES[t.name]||'default',traits:[],statusEffects:[],
+                    x:randInt(room.x+1,room.x+room.w-2),y:randInt(room.y+1,room.y+room.h-2)};
+                room.enemies.push(spawn);
+                addMsg("Something else is in the room now.",'enemy');
+            }
+        }},
+    {id:'night_terrors',weight:10,quality:1,
+        title:'🦷 Night terrors',
+        flavor:"You dream of a mouth with your father's voice.",
+        apply:(p)=>{const h=Math.floor(p.maxHp*0.10);p.hp=Math.min(p.maxHp,p.hp+h);
+            p.bonusMaxHp-=5;p.recalcStats();p.hp=Math.min(p.hp,p.maxHp);
+            addMsg(`You recover ${h} HP, but something has taken 5 max HP from you.`,'enemy')}},
+    {id:'ambushed',weight:7,quality:0,
+        title:'💀 Ambushed',
+        flavor:'You wake to breath on your neck.',
+        apply:(p)=>{
+            addMsg("You wake to breath on your neck.",'enemy');
+            const room=game.getCurrentRoom();if(room){
+                const floorNum=p.floor;
+                const mi=Math.min(ENEMY_TYPES.length-1,2+Math.floor(floorNum/2));
+                const t=pick(ENEMY_TYPES.slice(0,mi+1));const sc=1+floorNum*0.22;
+                const hp2=Math.floor(t.hp*sc),atk2=Math.floor(t.attack*sc),xp2=Math.floor(t.xp*sc);
+                const spawn={name:t.name,baseName:t.name,hp:hp2,maxHp:hp2,attack:atk2,xp:xp2,char:t.char,desc:t.desc,isBoss:false,isElite:false,role:ENEMY_ROLES[t.name]||'default',traits:[],statusEffects:[],
+                    x:p.x,y:p.y};
+                room.enemies.push(spawn);
+                startCombat(spawn,room);
+            }
+        }},
+    {id:'long_rest',weight:3,quality:5,
+        title:'🌑 The Long Rest',
+        flavor:'You slept a long time. Longer than you should have been able to.',
+        apply:(p)=>{p.hp=p.maxHp;p.bonusMaxHp+=1;p.recalcStats();p.hp=p.maxHp;
+            addMsg("Fully healed. Max HP +1. You feel rested, and wrong.",'hp')}},
+];
+
+function rollRestOutcome(p){
+    // Build weighted pool, applying torch/class modifiers
+    const torch=p.equipment&&p.equipment.torch;
+    const torchName=torch&&torch.name;
+    const pool=[];
+    for(const o of REST_OUTCOMES){
+        // Wick of the Martyr removes Ambushed
+        if(o.id==='ambushed'&&torchName==="Wick of the Martyr")continue;
+        let w=o.weight;
+        // Infant's Wick feeds while you sleep — more night terrors
+        if(o.id==='night_terrors'&&torchName==="The Infant's Wick")w+=15;
+        pool.push({o,w});
+    }
+    const total=pool.reduce((s,e)=>s+e.w,0);
+    function pickOne(){
+        let r=Math.random()*total;
+        for(const e of pool){if((r-=e.w)<=0)return e.o}
+        return pool[pool.length-1].o;
+    }
+    const first=pickOne();
+    // Rogue rolls twice, takes higher quality
+    if(p.className==='Rogue'){
+        const second=pickOne();
+        return (second.quality>first.quality)?second:first;
+    }
+    return first;
+}
+
+function canRestHere(){
+    if(!game||inCombat)return false;
+    const p=game.player;
+    if(!p||p.isDead())return false;
+    if(p.className==='Berserker')return false;
+    const room=game.getCurrentRoom();
+    if(!room||!pendingRestRoom||pendingRestRoom!==room)return false;
+    const idx=game.rooms.indexOf(room);
+    if(idx<0||game.restedRooms.has(idx))return false;
+    return true;
+}
+
+function offerRest(room){
+    // Called after a combat victory in a room
+    if(!game||!room)return;
+    const p=game.player;
+    if(p.className==='Berserker'){pendingRestRoom=null;return}
+    const idx=game.rooms.indexOf(room);
+    if(idx<0||game.restedRooms.has(idx)){pendingRestRoom=null;return}
+    // Still enemies in the room? Don't offer yet
+    if(room.enemies&&room.enemies.length>0){pendingRestRoom=null;return}
+    pendingRestRoom=room;
+    addMsg("You could catch your breath here. (R or Rest)",'dim');
+}
+
+function tryRest(){
+    if(!game)return;
+    const p=game.player;
+    if(inCombat){return}
+    if(p.className==='Berserker'){addMsg("He does not sit down.",'dim');renderAll();return}
+    if(!canRestHere()){
+        if(pendingRestRoom&&game.restedRooms.has(game.rooms.indexOf(pendingRestRoom))){
+            addMsg("You have already rested here. The room remembers.",'dim');
+        } else {
+            addMsg("Nowhere safe enough to rest. Find a quiet moment first.",'dim');
+        }
+        renderAll();return;
+    }
+    const room=game.getCurrentRoom();
+    const idx=game.rooms.indexOf(room);
+    game.restedRooms.add(idx);
+    const outcome=rollRestOutcome(p);
+    addMsg(`— ${outcome.title} —`,'cyan');
+    addMsg(outcome.flavor,'dim');
+    // Hand of Glory: after rest, fingers point at nearest threat
+    const torch=p.equipment&&p.equipment.torch;
+    if(torch&&torch.name==="Hand of Glory"){
+        let nearest=null,nd=1e9;
+        for(const r of game.rooms)for(const e of r.enemies){
+            const d=Math.abs(e.x-p.x)+Math.abs(e.y-p.y);
+            if(d<nd){nd=d;nearest=e}
+        }
+        if(nearest)addMsg(`The dead fingers twitch toward the ${nearest.name}, ${nd} tiles away.`,'dim');
+    }
+    outcome.apply(p);
+    pendingRestRoom=null;
+    if(p.isDead()){handleDeath();return}
+    renderAll();checkEndState();
+}
+
 function handleEnemyDefeat(enemy){
     const p=game.player;sfxKill();
     addMsg(`Defeated ${enemy.name}! (+${enemy.xp} XP)`,'hp');
@@ -2695,11 +2890,15 @@ function endCombat(resolved){
     document.getElementById('combat-screen').style.display='none';
     inCombat=false;
     tickTrinketCooldowns();
-    if(resolved&&combatEnemy.hp<=0){
-        const idx=combatRoom.enemies.indexOf(combatEnemy);
-        if(idx>=0)combatRoom.enemies.splice(idx,1);
+    const victoryRoom=combatRoom;
+    const victorious=resolved&&combatEnemy&&combatEnemy.hp<=0;
+    if(victorious){
+        const idx=victoryRoom.enemies.indexOf(combatEnemy);
+        if(idx>=0)victoryRoom.enemies.splice(idx,1);
     }
-    if(game.player.isDead())handleDeath();
+    if(game.player.isDead()){handleDeath();renderAll();checkEndState();return}
+    // Offer rest after any combat that ended in victory
+    if(victorious)offerRest(victoryRoom);
     renderAll();checkEndState();
 }
 
@@ -3584,6 +3783,7 @@ function saveGame(){
         analytics:game.analytics,
         usedShrineNames:[...(game._usedShrineNames||[])],
         chestlessFloors:game.chestlessFloors||0,
+        restedRooms:[...(game.restedRooms||[])],
     };
     localStorage.setItem('dotf_save',JSON.stringify(data));
     sfxSave();addMsg("Game saved!",'hp');renderAll();
@@ -3624,6 +3824,7 @@ function loadGame(){
         game.analytics=data.analytics||game.analytics;
         game._usedShrineNames=new Set(data.usedShrineNames||[]);
         game.chestlessFloors=data.chestlessFloors||0;
+        game.restedRooms=new Set(data.restedRooms||[]);
         game.rooms=data.rooms.map(rd=>{
             const r=new Room(rd.x,rd.y,rd.w,rd.h);
             Object.assign(r,rd);
@@ -3712,7 +3913,7 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='f')searchRoom();
     else if(e.key==='g')grabHidden();
     else if(e.key==='p')saveGame();
-    else if(e.key==='r')openRelics();
+    else if(e.key==='r'){if(canRestHere())tryRest();else openRelics();}
     else if(e.key==='b')openBestiary();
     else if(e.key==='?')openLegend();
 });
