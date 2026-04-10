@@ -2221,6 +2221,14 @@ function movePlayer(dx,dy){
         if(room.specialType&&!room.specialHandled){triggerSpecialRoom(room);return}
     }
 
+    // Offer rest in naturally empty rooms (no enemies, no shop, no boss)
+    if(room&&(!room.enemies||room.enemies.length===0)&&!room.hasShop&&!room.isBossRoom&&!pendingRestRoom){
+        const ri=game.rooms.indexOf(room);
+        if(ri>=0&&!game.restedRooms.has(ri)&&game.player.className!=='Berserker'){
+            pendingRestRoom=room;
+        }
+    }
+
     // Shop
     if(game.grid[ny][nx]==='$'){openShop();renderAll();return}
 
