@@ -2765,6 +2765,8 @@ function offerRest(room){
     if(p.className==='Berserker'){pendingRestRoom=null;return}
     const idx=game.rooms.indexOf(room);
     if(idx<0||game.restedRooms.has(idx)){pendingRestRoom=null;return}
+    // Can't rest with threats still in the room
+    if(room.enemies&&room.enemies.length>0){pendingRestRoom=null;return}
     pendingRestRoom=room;
     addMsg("You could catch your breath here. (R or Rest)",'dim');
 }
