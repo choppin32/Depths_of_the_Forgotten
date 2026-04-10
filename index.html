@@ -229,6 +229,8 @@ body {
     user-select: none;
 }
 #action-buttons button:active { background: #2a2a4e; border-color: #5ff; }
+.inv-locked { opacity: 0.55; cursor: default !important; }
+.inv-locked button { display: none; }
 #btn-rest.rest-available {
     background: linear-gradient(180deg, #2a1a00, #3a2200);
     color: #fc0;
@@ -999,6 +1001,68 @@ const CLASS_SLOTS = {
     Berserker:{weapon:'Axe',head:'War Helm',chest:'Hide',offhand:'Trophy',legs:'Leggings',feet:'Fur Boots',ring:'Ring',ring2:'Ring',amulet:'Amulet',trinket1:'Trinket',trinket2:'Trinket',torch:'Torch',offhandType:'atk'},
 };
 
+// ========== RARITY & ARMOR PROFICIENCY ==========
+const RARITY_COLORS = ['#999','#5f5','#5af','#a5f','#f93'];
+const RARITY_NAMES  = ['Common','Uncommon','Rare','Epic','Legendary'];
+
+// Heavier-armor classes can also wear lighter tiers
+const ARMOR_PROFICIENCY = {
+    Knight:    ['plate','mail','leather','cloth'],
+    Berserker: ['plate','mail','leather','cloth'],
+    Ranger:    ['mail','leather','cloth'],
+    Cleric:    ['mail','leather','cloth'],
+    Rogue:     ['leather','cloth'],
+    Mage:      ['cloth'],
+};
+
+const ARMOR_WEIGHT_LABELS = {plate:'Plate',mail:'Mail',leather:'Leather',cloth:'Cloth'};
+
+function getArmorWeight(item){
+    if(!item||item.type!=='armor')return null;
+    if(item.armorWeight)return item.armorWeight;
+    const n=item.name.toLowerCase();
+    // Cloth — check first (specific keywords)
+    if(/robe|vestment|shroud|ink-stained|cloth|circlet|silk/.test(n))return 'cloth';
+    // Plate — heavy body armor
+    if(/plate|plating/.test(n))return 'plate';
+    // Mail — medium metal
+    if(/chain|mail|mithril|steel|iron|reinforced|gear-tooth|dragon|crown|coif|colossus/.test(n))return 'mail';
+    // Leather — light
+    if(/leather|hide|pelt|tattered|worn|wooden|shadow|pilgrim|silent|hidden|buckler|hood|cloak|cap/.test(n))return 'leather';
+    return null; // universal (rings, amulets, etc.)
+}
+
+function getItemRarity(item){
+    if(item.rarity!==undefined)return item.rarity;
+    if(item.setId)return 2;
+    const v=item.value||0,t=item.type;
+    if(t==='gold'||t==='key')return 0;
+    if(t==='heal')return v>=50?2:v>=35?1:0;
+    if(t==='scroll')return v>=30?2:v>=20?1:0;
+    if(t==='life')return 3;
+    if(t==='buff_attack'||t==='buff_defense'||t==='buff_hp')return v>=3?2:1;
+    // Gear (weapon, armor, ring, amulet, trinket, torch)
+    if(t==='trinket')return item.rarity||1;
+    if(t==='torch'){const r=item.radius||2;return r<=2?0:r<=3?1:r<=4?2:3}
+    if(v<=2)return 0;if(v<=4)return 1;if(v<=6)return 2;if(v<=8)return 3;return 4;
+}
+
+function rarityColor(item){return RARITY_COLORS[Math.min(getItemRarity(item),RARITY_COLORS.length-1)]}
+function rarityTag(item){return RARITY_NAMES[Math.min(getItemRarity(item),RARITY_NAMES.length-1)]}
+function coloredName(item){return `<span style="color:${rarityColor(item)}">${item.name}</span>`}
+function coloredNameFull(item){
+    const w=getArmorWeight(item);
+    const wTag=w?` <span style="color:#777;font-size:9px">[${ARMOR_WEIGHT_LABELS[w]}]</span>`:'';
+    return `<span style="color:${rarityColor(item)}">${item.name}</span>${wTag}`;
+}
+
+function canEquip(item,className){
+    const w=getArmorWeight(item);
+    if(!w)return true; // non-armor or universal
+    const prof=ARMOR_PROFICIENCY[className];
+    return prof?prof.includes(w):true;
+}
+
 // ========== TORCH SYSTEM ==========
 const TORCHES = [
     {name:"Sputtering Stub",type:"torch",slot:"torch",radius:2,floorsLeft:3,isStarter:true,
@@ -1108,14 +1172,14 @@ const ENEMY_TYPES = [
 ];
 
 const BOSSES = {
-    5:{name:"The Rat King",hp:85,attack:9,xp:50,char:"B",desc:"A massive amalgamation of rats fused into one creature.",drop:{name:"Rat King's Crown",type:"armor",value:3,desc:"+3 DEF",slot:"head"},phase2Hp:40,phase2Msg:"The Rat King shrieks and splits into swarms!",phase2Atk:4},
-    10:{name:"The Bone Colossus",hp:140,attack:13,xp:100,char:"B",desc:"A towering skeleton of hundreds of fallen adventurers.",drop:{name:"Colossus Femur",type:"weapon",value:5,desc:"+5 ATK",slot:"weapon"},phase2Hp:70,phase2Msg:"The Colossus crumbles and reforms, larger!",phase2Atk:6},
-    15:{name:"The Plague Witch",hp:120,attack:16,xp:150,char:"B",desc:"A cackling hag poisons the air.",drop:{name:"Witch's Grimoire",type:"scroll",value:30,desc:"30 damage scroll"},phase2Hp:55,phase2Msg:"The Witch screeches, the air turns toxic!",phase2Atk:7},
-    20:{name:"The Iron Golem",hp:200,attack:18,xp:200,char:"B",desc:"A hulking construct of rusted metal.",drop:{name:"Golem Core",type:"amulet_hp",value:25,desc:"+25 Max HP",slot:"amulet"},phase2Hp:100,phase2Msg:"Steam erupts as the Golem enters overdrive!",phase2Atk:8},
-    25:{name:"The Shadow Dragon",hp:250,attack:22,xp:300,char:"B",desc:"A spectral dragon breathes dark fire.",drop:{name:"Dragon Scale Mail",type:"armor",value:5,desc:"+5 DEF",slot:"chest"},phase2Hp:120,phase2Msg:"Shadow flames engulf the room!",phase2Atk:10},
-    30:{name:"The Lich Lord",hp:280,attack:26,xp:400,char:"B",desc:"An ancient undead sorcerer drains life.",drop:{name:"Lich's Phylactery",type:"ring_atk",value:6,desc:"+6 ATK",slot:"ring"},phase2Hp:140,phase2Msg:"The Lich shatters its staff, dark energy surges!",phase2Atk:12},
-    35:{name:"The Abyssal Hydra",hp:350,attack:30,xp:500,char:"B",desc:"A multi-headed beast from the deep.",drop:{name:"Hydra Fang Blade",type:"weapon",value:8,desc:"+8 ATK",slot:"weapon"},phase2Hp:170,phase2Msg:"Two new heads sprout!",phase2Atk:14},
-    40:{name:"The Forgotten King",hp:450,attack:38,xp:1000,char:"B",desc:"The cursed ruler of the dungeon itself.",drop:{name:"Crown of the Forgotten",type:"armor",value:10,desc:"+10 DEF",slot:"head"},phase2Hp:220,phase2Msg:"'YOU WILL JOIN THE FORGOTTEN!'",phase2Atk:16},
+    5:{name:"The Rat King",hp:85,attack:9,xp:50,char:"B",desc:"A massive amalgamation of rats fused into one creature.",drop:{name:"Rat King's Crown",type:"armor",value:3,desc:"+3 DEF",slot:"head",rarity:2,armorWeight:'mail'},phase2Hp:40,phase2Msg:"The Rat King shrieks and splits into swarms!",phase2Atk:4},
+    10:{name:"The Bone Colossus",hp:140,attack:13,xp:100,char:"B",desc:"A towering skeleton of hundreds of fallen adventurers.",drop:{name:"Colossus Femur",type:"weapon",value:5,desc:"+5 ATK",slot:"weapon",rarity:2},phase2Hp:70,phase2Msg:"The Colossus crumbles and reforms, larger!",phase2Atk:6},
+    15:{name:"The Plague Witch",hp:120,attack:16,xp:150,char:"B",desc:"A cackling hag poisons the air.",drop:{name:"Witch's Grimoire",type:"scroll",value:30,desc:"30 damage scroll",rarity:2},phase2Hp:55,phase2Msg:"The Witch screeches, the air turns toxic!",phase2Atk:7},
+    20:{name:"The Iron Golem",hp:200,attack:18,xp:200,char:"B",desc:"A hulking construct of rusted metal.",drop:{name:"Golem Core",type:"amulet_hp",value:25,desc:"+25 Max HP",slot:"amulet",rarity:3},phase2Hp:100,phase2Msg:"Steam erupts as the Golem enters overdrive!",phase2Atk:8},
+    25:{name:"The Shadow Dragon",hp:250,attack:22,xp:300,char:"B",desc:"A spectral dragon breathes dark fire.",drop:{name:"Dragon Scale Mail",type:"armor",value:5,desc:"+5 DEF",slot:"chest",rarity:3,armorWeight:'plate'},phase2Hp:120,phase2Msg:"Shadow flames engulf the room!",phase2Atk:10},
+    30:{name:"The Lich Lord",hp:280,attack:26,xp:400,char:"B",desc:"An ancient undead sorcerer drains life.",drop:{name:"Lich's Phylactery",type:"ring_atk",value:6,desc:"+6 ATK",slot:"ring",rarity:3},phase2Hp:140,phase2Msg:"The Lich shatters its staff, dark energy surges!",phase2Atk:12},
+    35:{name:"The Abyssal Hydra",hp:350,attack:30,xp:500,char:"B",desc:"A multi-headed beast from the deep.",drop:{name:"Hydra Fang Blade",type:"weapon",value:8,desc:"+8 ATK",slot:"weapon",rarity:4},phase2Hp:170,phase2Msg:"Two new heads sprout!",phase2Atk:14},
+    40:{name:"The Forgotten King",hp:450,attack:38,xp:1000,char:"B",desc:"The cursed ruler of the dungeon itself.",drop:{name:"Crown of the Forgotten",type:"armor",value:10,desc:"+10 DEF",slot:"head",rarity:4,armorWeight:'mail'},phase2Hp:220,phase2Msg:"'YOU WILL JOIN THE FORGOTTEN!'",phase2Atk:16},
 };
 
 const ITEM_TYPES = [
@@ -1247,7 +1311,7 @@ function showLootToast(item,sourceName,isElite){
     const label=isElite?'★ ELITE DROP ★':'LOOT DROPPED';
     toast.innerHTML=`
         <span class="loot-toast-label">${label}</span>
-        <span class="loot-toast-name">${item.name}</span>
+        <span class="loot-toast-name" style="color:${rarityColor(item)}">${item.name}</span>
         <span class="loot-toast-stat">${stat}</span>
         ${sourceName?`<span class="loot-toast-from">from ${sourceName} → bag</span>`:''}
     `;
@@ -1918,8 +1982,12 @@ function applyItem(item,enemy=null){
     }
     else if(item.type==='armor'){
         if(!item.slot)item.slot='chest';
-        // Map legacy 'shield' slot to 'offhand'
         if(item.slot==='shield')item.slot='offhand';
+        if(!canEquip(item,p.className)){
+            const w=getArmorWeight(item);
+            addMsg(`Your ${p.className} cannot wear ${ARMOR_WEIGHT_LABELS[w]||'that'} armor.`,'enemy');
+            return;
+        }
         const cs=CLASS_SLOTS[p.className]||CLASS_SLOTS.Knight;
         const statLabel=(item.slot==='offhand'&&cs.offhandType==='atk')?'ATK':'DEF';
         p.equipItem(item);
@@ -2176,7 +2244,12 @@ function rollSetItem(floorNum) {
     else if (/Blade|Staff|Sword|Axe|Bow|Mace|Dagger/i.test(pieceName)) { slot = 'weapon'; type = 'weapon'; }
     else if (/Ring/i.test(pieceName)) { slot = 'ring'; type = 'ring_def'; }
     const desc = type === 'weapon' ? `+${value} ATK` : `+${value} DEF`;
-    return { name: pieceName, type, value, desc, slot, setId: set.id, setName: set.name };
+    // Assign armor weight based on set theme
+    const setWeights = {warden:'mail',shadow:'leather',ember:'cloth',pilgrim:'cloth'};
+    const aw = (type==='armor') ? (setWeights[set.id]||null) : null;
+    const item = { name: pieceName, type, value, desc, slot, setId: set.id, setName: set.name, rarity:2 };
+    if(aw) item.armorWeight = aw;
+    return item;
 }
 
 function renderStatusIcons(target) {
@@ -2917,7 +2990,7 @@ function openCombatInventory(){
     if(!usable.length){combatLog.push({text:"No usable items!"});renderCombat();return}
     let html='<button class="overlay-close" onclick="closeCombatInventory()">X</button><h2>USE ITEM</h2>';
     usable.forEach((item,idx)=>{
-        html+=`<div class="inv-item"><span>${item.name} — ${item.desc}</span><button onclick="useCombatItem(${idx})">Use</button></div>`;
+        html+=`<div class="inv-item"><span>${coloredName(item)} — ${item.desc}</span><button onclick="useCombatItem(${idx})">Use</button></div>`;
     });
     html+=`<div style="text-align:center;margin-top:10px"><button onclick="closeCombatInventory()" style="background:#222;color:#ccc;border:1px solid #555;padding:6px 16px;cursor:pointer;font-family:monospace;border-radius:3px">Cancel</button></div>`;
     document.getElementById('item-box').innerHTML=html;
@@ -2961,7 +3034,10 @@ function openInventory(){
             const stat=item.type==='weapon'?`ATK +${item.value}`:item.type==='amulet_hp'?`HP +${item.value}`:item.type==='ring_atk'?`ATK +${item.value}`:item.type==='ring_def'?`DEF +${item.value}`:`DEF +${item.value}`;
             const setTag=item.setId?` <span style="color:#f93;font-size:9px">[${item.setName||item.setId}]</span>`:'';
             const affixTag=item.affix?` <span style="color:#5ff;font-size:9px">${item.affix.desc}</span>`:'';
-            html+=`<div class="inv-item" onclick="useInventoryEquip(${realIdx})"><span>${item.name}${setTag}${affixTag} <span style="color:#5f5;font-size:10px">(${stat} → ${item.slot||'?'})</span></span><button onclick="event.stopPropagation();useInventoryEquip(${realIdx})">Equip</button></div>`;
+            const ce=canEquip(item,p.className);
+            const weightTag=getArmorWeight(item)?` <span style="color:#777;font-size:9px">[${ARMOR_WEIGHT_LABELS[getArmorWeight(item)]}]</span>`:'';
+            const cantTag=ce?'':`<span style="color:#f55;font-size:9px"> ✗ ${p.className} can't wear</span>`;
+            html+=`<div class="inv-item${ce?'':' inv-locked'}" onclick="${ce?`useInventoryEquip(${realIdx})`:''}"><span>${coloredName(item)}${weightTag}${setTag}${affixTag}${cantTag} <span style="color:#5f5;font-size:10px">(${stat} → ${item.slot||'?'})</span></span>${ce?`<button onclick="event.stopPropagation();useInventoryEquip(${realIdx})">Equip</button>`:'<span style="color:#555;font-size:10px">Locked</span>'}</div>`;
         });
     }
 
@@ -2969,21 +3045,21 @@ function openInventory(){
         html+='<div style="color:#5ff;font-size:11px;margin:6px 0 4px;text-align:left;border-bottom:1px solid #333;padding-bottom:3px">CONSUMABLES — tap to use</div>';
         usable.forEach(item=>{
             const realIdx=p.inventory.indexOf(item);
-            html+=`<div class="inv-item"><span>${item.name} — ${item.desc}</span><button onclick="useInventoryItem(${realIdx})">Use</button></div>`;
+            html+=`<div class="inv-item"><span>${coloredName(item)} — ${item.desc}</span><button onclick="useInventoryItem(${realIdx})">Use</button></div>`;
         });
     }
 
     if(scrolls.length){
         html+='<div style="color:#f55;font-size:11px;margin:6px 0 4px;text-align:left;border-bottom:1px solid #333;padding-bottom:3px">SCROLLS (combat only)</div>';
         scrolls.forEach(item=>{
-            html+=`<div class="inv-item"><span>${item.name} — ${item.desc}</span><span style="color:#555;font-size:10px">Combat</span></div>`;
+            html+=`<div class="inv-item"><span>${coloredName(item)} — ${item.desc}</span><span style="color:#555;font-size:10px">Combat</span></div>`;
         });
     }
 
     if(other.length){
         html+='<div style="color:#888;font-size:11px;margin:6px 0 4px;text-align:left;border-bottom:1px solid #333;padding-bottom:3px">OTHER</div>';
         other.forEach(item=>{
-            html+=`<div class="inv-item"><span>${item.name} — ${item.desc}</span></div>`;
+            html+=`<div class="inv-item"><span>${coloredName(item)} — ${item.desc}</span></div>`;
         });
     }
 
@@ -3062,9 +3138,9 @@ function renderEquipment(){
             const setTag=item.setId?`<div style="color:#f93;font-size:9px">[${item.setName||item.setId}]</div>`:'';
             const affixTag=item.affix?`<div style="color:#5ff;font-size:9px">${item.affix.desc}</div>`:'';
             const cdTag=(item.type==='trinket'&&item.active)?`<div style="color:${item.cdLeft>0?'#f55':'#5f5'};font-size:9px">${item.cdLeft>0?'CD: '+item.cdLeft:'Ready'}</div>`:'';
-            return `<div class="equip-slot" onclick="unequipSlot('${s.key}')" style="${item.type==='trinket'?'border-color:#a0a':''}">
+            return `<div class="equip-slot" onclick="unequipSlot('${s.key}')" style="border-color:${rarityColor(item)}">
                 <div class="slot-label">${s.label}</div>
-                <div class="slot-item">${item.name}</div>
+                <div class="slot-item">${coloredName(item)}</div>
                 <div class="slot-stat">${stat}</div>
                 ${setTag}${affixTag}${cdTag}
             </div>`;
@@ -3510,7 +3586,9 @@ function renderShopItems(){
             if(hasRelic('merchants_coin'))cost=Math.floor(cost*0.85);
             if(game.currentMutator&&game.currentMutator.id==='greed')cost=Math.floor(cost*1.25);
             const canBuy=p.gold>=cost;
-            html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${item.name}</div><div class="shop-item-desc">${item.desc}</div></div><button onclick="buyItem(${idx})" ${canBuy?'':'disabled'}>${cost}g</button></div>`;
+            const wt=getArmorWeight(item);const wtLabel=wt?` <span style="color:#777;font-size:9px">[${ARMOR_WEIGHT_LABELS[wt]}]</span>`:'';
+            const ce=canEquip(item,p.className);const noWear=(!ce&&wt)?` <span style="color:#f55;font-size:9px">✗ Can't wear</span>`:'';
+            html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${coloredName(item)}${wtLabel}${noWear}</div><div class="shop-item-desc">${item.desc}</div></div><button onclick="buyItem(${idx})" ${canBuy?'':'disabled'}>${cost}g</button></div>`;
         });
     } else {
         // Sell tab — show player inventory + equipped items
@@ -3523,9 +3601,9 @@ function renderShopItems(){
                 p.inventory.forEach((item,idx)=>{
                     const price=getSellPrice(item);
                     if(price<=0){
-                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name" style="color:#888">${item.name}</div><div class="shop-item-desc">${item.desc}</div></div><span style="color:#555;font-size:11px">Can't sell</span></div>`;
+                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${coloredName(item)}</div><div class="shop-item-desc">${item.desc}</div></div><span style="color:#555;font-size:11px">Can't sell</span></div>`;
                     } else {
-                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${item.name}${item.setId?' <span style="color:#f93;font-size:9px">[Set]</span>':''}</div><div class="shop-item-desc">${item.desc}</div></div><button onclick="sellItem(${idx})" style="background:#2e1a1a;color:#fc0;border-color:#fc0">Sell ${price}g</button></div>`;
+                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${coloredName(item)}${item.setId?' <span style="color:#f93;font-size:9px">[Set]</span>':''}</div><div class="shop-item-desc">${item.desc}</div></div><button onclick="sellItem(${idx})" style="background:#2e1a1a;color:#fc0;border-color:#fc0">Sell ${price}g</button></div>`;
                     }
                 });
                 html+='</div>';
@@ -3539,9 +3617,9 @@ function renderShopItems(){
                     const price=getSellPrice(item);
                     const statLabel=item.type==='weapon'?`ATK +${item.value}`:item.type==='amulet_hp'?`HP +${item.value}`:`DEF +${item.value}`;
                     if(price<=0){
-                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name" style="color:#888">${item.name} <span style="font-size:9px;color:#555">[${slot}]</span></div><div class="shop-item-desc">${statLabel}</div></div><span style="color:#555;font-size:11px">Can't sell</span></div>`;
+                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${coloredName(item)} <span style="font-size:9px;color:#555">[${slot}]</span></div><div class="shop-item-desc">${statLabel}</div></div><span style="color:#555;font-size:11px">Can't sell</span></div>`;
                     } else {
-                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${item.name} <span style="font-size:9px;color:#888">[${slot}]</span>${item.setId?' <span style="color:#f93;font-size:9px">[Set]</span>':''}</div><div class="shop-item-desc">${statLabel}</div></div><button onclick="sellEquipped('${slot}')" style="background:#2e1a1a;color:#fc0;border-color:#fc0">Sell ${price}g</button></div>`;
+                        html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${coloredName(item)} <span style="font-size:9px;color:#888">[${slot}]</span>${item.setId?' <span style="color:#f93;font-size:9px">[Set]</span>':''}</div><div class="shop-item-desc">${statLabel}</div></div><button onclick="sellEquipped('${slot}')" style="background:#2e1a1a;color:#fc0;border-color:#fc0">Sell ${price}g</button></div>`;
                     }
                 });
                 html+='</div>';
