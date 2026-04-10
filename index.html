@@ -67,6 +67,78 @@ body {
 .floor-color { color: #444; }
 .shrine-color { color: #ff0; font-weight: bold; text-shadow: 0 0 6px #ff0; }
 .campfire-color { color: #f93; font-weight: bold; text-shadow: 0 0 6px #f60; }
+
+/* ===== Loot drop toast ===== */
+#loot-toast-container {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    max-width: 90vw;
+}
+.loot-toast {
+    background: linear-gradient(180deg, rgba(20,10,0,0.96), rgba(40,20,0,0.96));
+    border: 2px solid #fc0;
+    border-radius: 6px;
+    padding: 10px 18px;
+    color: #fc0;
+    font-family: monospace;
+    font-size: 13px;
+    text-shadow: 0 0 6px #fa0;
+    box-shadow: 0 0 20px rgba(255,204,0,0.6), inset 0 0 12px rgba(255,204,0,0.15);
+    animation: loot-toast-in 0.35s ease-out, loot-toast-out 0.5s ease-in forwards;
+    animation-delay: 0s, 2.8s;
+    text-align: center;
+    min-width: 240px;
+}
+.loot-toast .loot-toast-label {
+    display: block;
+    color: #f93;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    opacity: 0.85;
+}
+.loot-toast .loot-toast-name {
+    display: block;
+    color: #ff0;
+    font-size: 15px;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+.loot-toast .loot-toast-stat {
+    display: block;
+    color: #5f5;
+    font-size: 11px;
+}
+.loot-toast .loot-toast-from {
+    display: block;
+    color: #888;
+    font-size: 9px;
+    font-style: italic;
+    margin-top: 2px;
+}
+.loot-toast.elite {
+    border-color: #f93;
+    color: #f93;
+    box-shadow: 0 0 24px rgba(255,147,0,0.7), inset 0 0 14px rgba(255,147,0,0.2);
+}
+.loot-toast.elite .loot-toast-name { color: #fc6; }
+@keyframes loot-toast-in {
+    from { opacity: 0; transform: translateY(-20px) scale(0.9); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes loot-toast-out {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(-10px) scale(0.95); }
+}
 .prison-color { color: #aaa; font-weight: bold; text-shadow: 0 0 5px #888; }
 .vault-color { color: #fc0; font-weight: bold; text-shadow: 0 0 6px #fa0; }
 .lore-color { color: #5ff; font-weight: bold; text-shadow: 0 0 5px #0ff; }
@@ -670,6 +742,9 @@ body {
 </div>
 </div>
 
+<!-- Loot drop toast container -->
+<div id="loot-toast-container"></div>
+
 <!-- Game UI -->
 <div id="game-container" style="display:none">
     <div id="map-display"></div>
@@ -1039,6 +1114,117 @@ const CHEST_ITEMS = [
     {name:"Elixir of Vitality",type:"buff_hp",value:10,desc:"+10 max HP"},{name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests"},
 ];
 
+// ===== Kill-drop system: enemy-type-tiered loot pools =====
+// Each enemy type is categorized so its drops feel thematic. Beasts drop
+// organics/coin, humanoids drop gear, undead drop bones/relics, arcane
+// drops scrolls/potions, demons drop fire/ATK gear, constructs drop DEF gear.
+const ENEMY_CATEGORY = {
+    "Rat Swarm":"beast","Cave Spider":"beast","Vampire Bat":"beast",
+    "Goblin":"humanoid","Bandit":"humanoid","Orc Warlord":"humanoid","Troll":"humanoid",
+    "Skeleton":"undead","Zombie":"undead","Wraith":"undead","Death Knight":"undead","Necromancer":"undead",
+    "Dark Wizard":"arcane","Shadow Assassin":"arcane",
+    "Demon Imp":"demon","Fire Elemental":"demon","Elder Demon":"demon",
+    "Gargoyle":"construct","Ice Golem":"construct","Mimic":"construct",
+};
+const DROP_POOLS = {
+    beast:[
+        {name:"Health Potion",type:"heal",value:8,desc:"Restores 8 HP"},
+        {name:"Health Potion",type:"heal",value:8,desc:"Restores 8 HP"},
+        {name:"Tattered Pelt",type:"armor",value:1,desc:"+1 DEF",slot:"chest"},
+        {name:"Sharpened Fang",type:"weapon",value:2,desc:"+2 ATK",slot:"weapon"},
+        {name:"Stolen Trinket",type:"gold",value:15,desc:"15 gold"},
+    ],
+    humanoid:[
+        {name:"Rusty Sword",type:"weapon",value:2,desc:"+2 ATK",slot:"weapon"},
+        {name:"Iron Dagger",type:"weapon",value:3,desc:"+3 ATK",slot:"weapon"},
+        {name:"Leather Armor",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
+        {name:"Wooden Buckler",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},
+        {name:"Leather Cap",type:"armor",value:1,desc:"+1 DEF",slot:"head"},
+        {name:"Worn Boots",type:"armor",value:1,desc:"+1 DEF",slot:"feet"},
+        {name:"Bandit's Purse",type:"gold",value:25,desc:"25 gold"},
+        {name:"Health Potion",type:"heal",value:10,desc:"Restores 10 HP"},
+        {name:"Skeleton Key",type:"key",value:1,desc:"Opens locked chests"},
+    ],
+    undead:[
+        {name:"Bone Amulet",type:"amulet_hp",value:8,desc:"+8 Max HP",slot:"amulet"},
+        {name:"Grave Dust",type:"scroll",value:12,desc:"12 damage"},
+        {name:"Cracked Femur",type:"weapon",value:3,desc:"+3 ATK",slot:"weapon"},
+        {name:"Shroud Tatters",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
+        {name:"Rotted Copper",type:"gold",value:18,desc:"18 gold"},
+        {name:"Soul Fragment",type:"heal",value:15,desc:"Restores 15 HP"},
+    ],
+    arcane:[
+        {name:"Scroll of Lightning",type:"scroll",value:15,desc:"15 damage"},
+        {name:"Scroll of Fire",type:"scroll",value:20,desc:"20 damage"},
+        {name:"Mana Vial",type:"heal",value:12,desc:"Restores 12 HP"},
+        {name:"Enchanted Band",type:"ring_atk",value:2,desc:"+2 ATK",slot:"ring"},
+        {name:"Ink-stained Robe",type:"armor",value:2,desc:"+2 DEF",slot:"chest"},
+        {name:"Arcane Dust",type:"gold",value:30,desc:"30 gold"},
+    ],
+    demon:[
+        {name:"Cinderstone Ring",type:"ring_atk",value:3,desc:"+3 ATK",slot:"ring"},
+        {name:"Infernal Blade",type:"weapon",value:4,desc:"+4 ATK",slot:"weapon"},
+        {name:"Brimstone Vial",type:"scroll",value:25,desc:"25 damage"},
+        {name:"Hellfire Core",type:"buff_attack",value:2,desc:"+2 ATK permanently"},
+        {name:"Molten Coin",type:"gold",value:40,desc:"40 gold"},
+    ],
+    construct:[
+        {name:"Iron Plating",type:"armor",value:3,desc:"+3 DEF",slot:"chest"},
+        {name:"Steel Greaves",type:"armor",value:2,desc:"+2 DEF",slot:"legs"},
+        {name:"Gear-tooth Shield",type:"armor",value:2,desc:"+2 DEF",slot:"offhand"},
+        {name:"Core Shard",type:"buff_defense",value:2,desc:"+2 DEF permanently"},
+        {name:"Polished Gemstone",type:"gold",value:35,desc:"35 gold"},
+        {name:"Silver Ring",type:"ring_def",value:2,desc:"+2 DEF",slot:"ring"},
+    ],
+};
+function rollKillDrop(enemy,floorNum){
+    const cat=ENEMY_CATEGORY[enemy.baseName||enemy.name]||'humanoid';
+    const pool=DROP_POOLS[cat]||DROP_POOLS.humanoid;
+    // Scale item value slightly with floor depth (gear gets a bit better deep)
+    const item=cloneItem(pick(pool));
+    if(floorNum>=15&&item.value&&item.type!=='gold'&&item.type!=='heal')item.value+=1;
+    if(floorNum>=25&&item.value&&item.type!=='gold'&&item.type!=='heal')item.value+=1;
+    // Gold drops scale with floor
+    if(item.type==='gold')item.value=Math.floor(item.value*(1+floorNum*0.08));
+    return item;
+}
+
+// Show a prominent animated toast when an enemy drops loot.
+// The toast auto-dismisses after ~3.3s via CSS animation.
+function showLootToast(item,sourceName,isElite){
+    const container=document.getElementById('loot-toast-container');
+    if(!container)return;
+    const toast=document.createElement('div');
+    toast.className='loot-toast'+(isElite?' elite':'');
+    // Build stat line based on item type
+    let stat='';
+    if(item.type==='weapon')stat=`+${item.value} ATK`;
+    else if(item.type==='armor')stat=`+${item.value} DEF`;
+    else if(item.type==='ring_atk')stat=`+${item.value} ATK`;
+    else if(item.type==='ring_def')stat=`+${item.value} DEF`;
+    else if(item.type==='amulet_hp')stat=`+${item.value} Max HP`;
+    else if(item.type==='heal')stat=`Restores ${item.value} HP`;
+    else if(item.type==='scroll')stat=`${item.value} damage`;
+    else if(item.type==='gold')stat=`${item.value} gold`;
+    else if(item.type==='buff_attack')stat=`+${item.value} ATK permanently`;
+    else if(item.type==='buff_defense')stat=`+${item.value} DEF permanently`;
+    else if(item.type==='buff_hp')stat=`+${item.value} Max HP`;
+    else if(item.type==='key')stat=item.desc||'Opens locked chests';
+    else if(item.type==='trinket')stat=item.desc||'Trinket';
+    else if(item.type==='torch')stat=item.desc||'Torch';
+    else stat=item.desc||'';
+    const label=isElite?'★ ELITE DROP ★':'LOOT DROPPED';
+    toast.innerHTML=`
+        <span class="loot-toast-label">${label}</span>
+        <span class="loot-toast-name">${item.name}</span>
+        <span class="loot-toast-stat">${stat}</span>
+        ${sourceName?`<span class="loot-toast-from">from ${sourceName} → bag</span>`:''}
+    `;
+    container.appendChild(toast);
+    // Remove from DOM after animation completes
+    setTimeout(()=>{if(toast.parentNode)toast.parentNode.removeChild(toast)},3400);
+}
+
 const HIDDEN_ITEMS = [
     {name:"Ancient Coin",type:"gold",value:40,desc:"40 gold"},{name:"Hidden Dagger",type:"weapon",value:4,desc:"+4 ATK",slot:"weapon"},
     {name:"Secret Scroll",type:"scroll",value:25,desc:"25 damage"},{name:"Dusty Potion",type:"heal",value:14,desc:"Restores 14 HP"},
@@ -1369,7 +1555,7 @@ function generateDungeon(floorNum) {
                 room.enemies.push(enemy);
             }
         }
-        if(!room.hasShop&&Math.random()<0.35){let t=cloneItem(pick(ITEM_TYPES));t=rollAffix(t);t.x=randInt(x+1,x+w-2);t.y=randInt(y+1,y+h-2);room.items.push(t)}
+        // Floor items removed — items now drop from enemies on kill.
         if(Math.random()<0.2){
             let t;
             if(Math.random()<0.1){t=rollTorchDrop(floorNum)}
@@ -2440,6 +2626,7 @@ function handleEnemyDefeat(enemy){
         if(enemy.drop){
             if(AUTO_USE.has(enemy.drop.type)){applyItem(enemy.drop);addMsg(`★ BOSS DROP: ${enemy.drop.name} — ${enemy.drop.desc}`,'boss')}
             else{game.player.inventory.push(enemy.drop);addMsg(`★ BOSS DROP: ${enemy.drop.name} — added to bag`,'boss')}
+            showLootToast(enemy.drop,enemy.name,true);
         }
         // Rat King guarantees the Hand of Glory torch
         if(enemy.name==="The Rat King"){
@@ -2447,6 +2634,7 @@ function handleEnemyDefeat(enemy){
             game.player.inventory.push(hog);
             addMsg(`★ BOSS DROP: ${hog.name} — added to bag`,'boss');
             addMsg(`"${hog.flavor}"`,'dim');
+            showLootToast(hog,enemy.name,true);
         }
         game.grid[enemy.y][enemy.x]='>';addMsg("Stairs appear!",'stairs');
         // Boss relic reward
@@ -2463,11 +2651,31 @@ function handleEnemyDefeat(enemy){
     if(xpBonusTrinket>0)xp=Math.floor(xp*(1+xpBonusTrinket));
     if(game.currentMutator&&game.currentMutator.effects.xpMult)xp=Math.floor(xp*game.currentMutator.effects.xpMult);
     if(p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}! ★`,'xp')}
-    // Elite enemies can drop set items or trinkets
+    // ===== Kill-drop loot system =====
+    // Normal enemies: 25% chance to drop a themed item
+    // Elite enemies: 100% guaranteed drop (on top of set/trinket roll below)
+    if(!enemy.isBoss){
+        const dropChance=enemy.isElite?1.0:0.25;
+        if(Math.random()<dropChance){
+            const drop=rollKillDrop(enemy,p.floor);
+            if(drop){
+                if(AUTO_USE.has(drop.type)){
+                    applyItem(drop);
+                    addMsg(`★ ${enemy.name} drops: ${drop.name} — ${drop.desc}`,'item');
+                } else {
+                    p.inventory.push(drop);
+                    addMsg(`★ ${enemy.name} drops: ${drop.name} — added to bag`,'item');
+                }
+                showLootToast(drop,enemy.name,enemy.isElite);
+                if(game.analytics)game.analytics.itemsFound=(game.analytics.itemsFound||0)+1;
+            }
+        }
+    }
+    // Elite enemies can additionally drop set items or trinkets
     if(enemy.isElite){
         const si=rollSetItem(p.floor);
-        if(si){game.player.inventory.push(si);addMsg(`★ Elite drop: ${si.name} (${si.setName}) — added to bag`,'boss')}
-        else if(Math.random()<0.25){const tri=rollTrinketDrop(p.floor);if(tri){p.inventory.push(tri);addMsg(`★ Elite drop: ${tri.name} — added to bag`,'boss')}}
+        if(si){game.player.inventory.push(si);addMsg(`★ Elite drop: ${si.name} (${si.setName}) — added to bag`,'boss');showLootToast(si,enemy.name,true)}
+        else if(Math.random()<0.25){const tri=rollTrinketDrop(p.floor);if(tri){p.inventory.push(tri);addMsg(`★ Elite drop: ${tri.name} — added to bag`,'boss');showLootToast(tri,enemy.name,true)}}
     }
     // Bosses have a chance to drop trinkets
     if(enemy.isBoss&&Math.random()<0.4){
