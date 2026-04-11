@@ -229,7 +229,13 @@ body {
     user-select: none;
 }
 #action-buttons button:active { background: #2a2a4e; border-color: #5ff; }
-.inv-locked { opacity: 0.55; cursor: default !important; }
+.inv-locked {
+    opacity: 0.6; cursor: default !important;
+    border: 2px solid #d33 !important;
+    border-radius: 5px;
+    background: rgba(200,30,30,0.08);
+    box-shadow: inset 0 0 10px rgba(200,30,30,0.15), 0 0 6px rgba(200,30,30,0.25);
+}
 .inv-locked button { display: none; }
 #btn-rest.rest-available {
     background: linear-gradient(180deg, #2a1a00, #3a2200);
@@ -3588,7 +3594,7 @@ function renderShopItems(){
             const canBuy=p.gold>=cost;
             const wt=getArmorWeight(item);const wtLabel=wt?` <span style="color:#777;font-size:9px">[${ARMOR_WEIGHT_LABELS[wt]}]</span>`:'';
             const ce=canEquip(item,p.className);const noWear=(!ce&&wt)?` <span style="color:#f55;font-size:9px">✗ Can't wear</span>`:'';
-            html+=`<div class="shop-item"><div class="shop-item-info"><div class="shop-item-name">${coloredName(item)}${wtLabel}${noWear}</div><div class="shop-item-desc">${item.desc}</div></div><button onclick="buyItem(${idx})" ${canBuy?'':'disabled'}>${cost}g</button></div>`;
+            html+=`<div class="shop-item${(!ce&&wt)?' shop-item-locked':''}" style="${(!ce&&wt)?'border:2px solid #d33;border-radius:5px;background:rgba(200,30,30,0.08);box-shadow:inset 0 0 10px rgba(200,30,30,0.15)':''}"><div class="shop-item-info"><div class="shop-item-name">${coloredName(item)}${wtLabel}${noWear}</div><div class="shop-item-desc">${item.desc}</div></div><button onclick="buyItem(${idx})" ${canBuy?'':'disabled'}>${cost}g</button></div>`;
         });
     } else {
         // Sell tab — show player inventory + equipped items
