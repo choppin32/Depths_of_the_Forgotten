@@ -2756,9 +2756,19 @@ const REST_OUTCOMES=[
         title:'🩸 Light sleep',
         flavor:'You wake up. Your torch is shorter than you remember.',
         apply:(p)=>{const h=Math.floor(p.maxHp*0.40);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`You recover ${h} HP.`,'hp');
-            // Burn a floor of starter-torch fuel if equipped
+            // Something fed on the torch while you slept — lose 1 vision tile
             const t=p.equipment&&p.equipment.torch;
-            if(t&&t.floorsLeft!==undefined&&t.floorsLeft>0){t.floorsLeft=Math.max(0,t.floorsLeft-1);addMsg("Your torch burned while you slept.",'dim')}
+            if(t){
+                if(!t.restDrain)t.restDrain=0;
+                t.restDrain++;
+                if(t.restDrain>=3){
+                    addMsg(`Your ${t.name} crumbles to ash. The dark swallows everything.`,'enemy');
+                    p.equipment.torch=null;
+                } else {
+                    t.radius=Math.max(1,t.radius-1);
+                    addMsg(`Your ${t.name} dims... vision reduced to ${t.radius}. (${3-t.restDrain} more and it dies)`,'dim');
+                }
+            }
         }},
     {id:'watched',weight:15,quality:2,
         title:'👁 Watched',
@@ -3138,7 +3148,7 @@ function renderEquipment(){
             else if(item.type==='ring_atk')stat=`ATK +${item.value}`;
             else if(item.type==='ring_def')stat=`DEF +${item.value}`;
             else if(item.type==='trinket')stat=item.desc;
-            else if(item.type==='torch'){stat=item.desc+(item.isStarter&&item.floorsLeft?` (${item.floorsLeft} left)`:'')}
+            else if(item.type==='torch'){stat=`${item.radius} tile vision`;if(item.isStarter&&item.floorsLeft)stat+=` (${item.floorsLeft} floors)`;if(item.restDrain)stat+=` <span style="color:#f55">(${item.restDrain}/3 drained)</span>`}
             else if(s.key==='offhand'&&cs.offhandType==='atk')stat=`ATK +${item.value}`;
             else stat=`DEF +${item.value}`;
             const setTag=item.setId?`<div style="color:#f93;font-size:9px">[${item.setName||item.setId}]</div>`:'';
