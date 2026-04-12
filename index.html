@@ -2714,6 +2714,7 @@ function movePlayer(dx,dy){
                 sfxItem();
                 if(AUTO_USE.has(item.type)){applyItem(item);addMsg(`Found: ${item.name} — ${item.desc}`,'item')}
                 else{p.inventory.push(item);addMsg(`Found: ${item.name} — added to bag`,'item')}
+                showLootToast(item,'floor',false);
                 room.items.splice(i,1);
                 if(game.analytics)game.analytics.itemsFound=(game.analytics.itemsFound||0)+1;
             }
@@ -2783,6 +2784,7 @@ function openChest(chest){
     const item=chest.item;
     if(AUTO_USE.has(item.type)){applyItem(item);addMsg(`★ Chest: ${item.name} — ${item.desc}`,'chest')}
     else{p.inventory.push(item);addMsg(`★ Chest: ${item.name} — added to bag`,'chest')}
+    showLootToast(item,'chest',false);
     if(game.analytics)game.analytics.itemsFound=(game.analytics.itemsFound||0)+1;
 }
 
@@ -4180,6 +4182,7 @@ function grabHidden(){
             sfxItem();
             if(AUTO_USE.has(h.type)){applyItem(h);addMsg(`Picked up: ${h.name} — ${h.desc}`,'hidden')}
             else{p.inventory.push(h);addMsg(`Picked up: ${h.name} — added to bag`,'hidden')}
+            showLootToast(h,'hidden cache',false);
             room.hiddenItems.splice(i,1);
             if(game.analytics)game.analytics.itemsFound=(game.analytics.itemsFound||0)+1;
         }
