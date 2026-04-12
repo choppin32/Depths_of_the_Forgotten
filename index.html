@@ -69,6 +69,105 @@ body {
 .shrine-color { color: #ff0; font-weight: bold; text-shadow: 0 0 6px #ff0; }
 .campfire-color { color: #f93; font-weight: bold; text-shadow: 0 0 6px #f60; }
 
+/* ===== Screen shake ===== */
+@keyframes screen-shake {
+    0%,100% { transform: translateX(0); }
+    10% { transform: translateX(-3px) translateY(1px); }
+    30% { transform: translateX(3px) translateY(-1px); }
+    50% { transform: translateX(-2px) translateY(2px); }
+    70% { transform: translateX(2px) translateY(-1px); }
+    90% { transform: translateX(-1px); }
+}
+@keyframes screen-shake-heavy {
+    0%,100% { transform: translateX(0); }
+    10% { transform: translateX(-6px) translateY(3px); }
+    20% { transform: translateX(5px) translateY(-2px); }
+    30% { transform: translateX(-4px) translateY(4px); }
+    40% { transform: translateX(6px) translateY(-3px); }
+    50% { transform: translateX(-5px) translateY(2px); }
+    60% { transform: translateX(4px) translateY(-4px); }
+    70% { transform: translateX(-3px) translateY(3px); }
+    80% { transform: translateX(5px) translateY(-1px); }
+    90% { transform: translateX(-2px) translateY(2px); }
+}
+.shake { animation: screen-shake 0.3s ease; }
+.shake-heavy { animation: screen-shake-heavy 0.5s ease; }
+
+/* ===== Damage flash overlay ===== */
+#damage-flash {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    pointer-events: none; z-index: 9998;
+    background: radial-gradient(ellipse at center, rgba(255,0,0,0.25), rgba(180,0,0,0.15));
+    opacity: 0; transition: opacity 0.08s ease;
+}
+#damage-flash.active { opacity: 1; }
+
+/* ===== Gold flash overlay ===== */
+#gold-flash {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    pointer-events: none; z-index: 9998;
+    background: radial-gradient(ellipse at center, rgba(255,200,0,0.2), rgba(255,150,0,0.1));
+    opacity: 0; transition: opacity 0.08s ease;
+}
+#gold-flash.active { opacity: 1; }
+
+/* ===== Combat start flash ===== */
+#combat-flash {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    pointer-events: none; z-index: 9997;
+    border: 4px solid transparent; box-sizing: border-box;
+    opacity: 0;
+}
+@keyframes combat-border-pulse {
+    0% { border-color: rgba(255,50,50,0.9); opacity:1; }
+    50% { border-color: rgba(255,50,50,0.5); opacity:1; }
+    100% { border-color: transparent; opacity:0; }
+}
+#combat-flash.active { animation: combat-border-pulse 0.8s ease forwards; }
+
+/* ===== Event banner ===== */
+#event-banner {
+    position: fixed; top: 35%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 9999; pointer-events: none;
+    font-family: 'Courier New', monospace;
+    font-size: clamp(18px, 4vw, 28px);
+    font-weight: bold;
+    color: #fc0;
+    text-shadow: 0 0 12px #f90, 0 0 30px rgba(255,150,0,0.5), 2px 2px 4px #000;
+    letter-spacing: 3px;
+    text-align: center;
+    opacity: 0;
+    white-space: nowrap;
+}
+@keyframes banner-in {
+    0% { opacity:0; transform: translate(-50%,-50%) scale(0.7); }
+    20% { opacity:1; transform: translate(-50%,-50%) scale(1.05); }
+    80% { opacity:1; transform: translate(-50%,-50%) scale(1); }
+    100% { opacity:0; transform: translate(-50%,-50%) scale(1.1); }
+}
+#event-banner.active { animation: banner-in 1.8s ease forwards; }
+#event-banner.danger { color: #f44; text-shadow: 0 0 12px #f00, 0 0 30px rgba(255,0,0,0.5), 2px 2px 4px #000; }
+#event-banner.mystery { color: #a5f; text-shadow: 0 0 12px #80f, 0 0 30px rgba(128,0,255,0.4), 2px 2px 4px #000; }
+#event-banner.holy { color: #5ff; text-shadow: 0 0 12px #0ff, 0 0 30px rgba(0,255,255,0.4), 2px 2px 4px #000; }
+
+/* ===== Kill streak toast ===== */
+#streak-toast {
+    position: fixed; top: 12%; left: 50%; transform: translateX(-50%);
+    z-index: 9998; pointer-events: none;
+    font-family: 'Courier New', monospace;
+    font-size: clamp(12px, 2.5vw, 16px);
+    color: #f93;
+    text-shadow: 0 0 8px #f60;
+    opacity: 0; white-space: nowrap;
+}
+@keyframes streak-in {
+    0% { opacity:0; transform: translateX(-50%) translateY(10px); }
+    15% { opacity:1; transform: translateX(-50%) translateY(0); }
+    80% { opacity:1; }
+    100% { opacity:0; transform: translateX(-50%) translateY(-5px); }
+}
+#streak-toast.active { animation: streak-in 2.5s ease forwards; }
+
 /* ===== Epilogue crawl ===== */
 #epilogue-screen {
     display:none;position:fixed;top:0;left:0;width:100%;height:100%;
@@ -819,6 +918,12 @@ body {
 
 <!-- Loot drop toast container -->
 <div id="loot-toast-container"></div>
+<!-- Notification overlays -->
+<div id="damage-flash"></div>
+<div id="gold-flash"></div>
+<div id="combat-flash"></div>
+<div id="event-banner"></div>
+<div id="streak-toast"></div>
 <div id="rest-banner">You could catch your breath here. Press <b>R</b> or tap <b>Rest</b>.</div>
 
 <!-- Game UI -->
@@ -1338,6 +1443,7 @@ function rollKillDrop(enemy,floorNum){
 // Show a prominent animated toast when an enemy drops loot.
 // The toast auto-dismisses after ~3.3s via CSS animation.
 function showLootToast(item,sourceName,isElite){
+    flashGold();
     const container=document.getElementById('loot-toast-container');
     if(!container)return;
     const toast=document.createElement('div');
@@ -1583,13 +1689,18 @@ function rollFloorEvent(){
 function triggerFloorEvent(room){
     const ev=rollFloorEvent();
     room._floorEvent=ev;room._floorEventHandled=true;
-    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
-    html+=`<h2 style="color:#f93">${ev.title.toUpperCase()}</h2><p style="color:#bbb;margin-bottom:12px">${ev.desc}</p>`;
-    ev.choices.forEach((c,i)=>{
-        html+=`<div><button onclick="handleFloorEvent(${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
-    });
-    document.getElementById('item-box').innerHTML=html;
-    document.getElementById('item-screen').style.display='flex';
+    sfxFloorEvent();
+    showEventBanner('⚠ SOMETHING STIRS...','mystery');
+    resetTension();
+    setTimeout(()=>{
+        let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+        html+=`<h2 style="color:#f93">${ev.title.toUpperCase()}</h2><p style="color:#bbb;margin-bottom:12px">${ev.desc}</p>`;
+        ev.choices.forEach((c,i)=>{
+            html+=`<div><button onclick="handleFloorEvent(${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
+        });
+        document.getElementById('item-box').innerHTML=html;
+        document.getElementById('item-screen').style.display='flex';
+    },1200);
 }
 
 function handleFloorEvent(choiceIdx){
@@ -1855,6 +1966,150 @@ function sfxVictory(){[523,587,659,698,784,880,988,1047].forEach((f,i)=>setTimeo
 function sfxSave(){beep(600,50);setTimeout(()=>beep(800,80),60)}
 function sfxBlock(){beep(250,80)} function sfxFlee(){beep(300,50);setTimeout(()=>beep(250,50),60)}
 function sfxStairs(){[300,400,500,600].forEach((f,i)=>setTimeout(()=>beep(f,80),i*80))}
+
+// ========== NOTIFICATION / FEEDBACK SYSTEM ==========
+// --- New SFX ---
+function sfxFloorEvent(){
+    // Mysterious 3-note descending chime
+    if(!soundEnabled)return;
+    [660,520,440].forEach((f,i)=>setTimeout(()=>beep(f,180,0.06),i*150));
+}
+function sfxSpecialRoom(){
+    // Slow bell toll
+    if(!soundEnabled)return;
+    beep(220,400,0.05);setTimeout(()=>beep(165,500,0.04),300);
+}
+function sfxRestGood(){
+    // Calm ascending arpeggio
+    if(!soundEnabled)return;
+    [330,392,494,587].forEach((f,i)=>setTimeout(()=>beep(f,120,0.04),i*100));
+}
+function sfxRestBad(){
+    // Dissonant screech
+    if(!soundEnabled)return;
+    beep(120,300,0.06);setTimeout(()=>beep(95,250,0.05),100);
+    setTimeout(()=>beep(80,400,0.04),200);
+}
+function sfxTelegraph(){
+    // Warning pulse: two quick low buzzes
+    if(!soundEnabled)return;
+    beep(180,80,0.06);setTimeout(()=>beep(180,80,0.06),120);
+}
+function sfxBossFanfare(){
+    // Dramatic descending fanfare, then rising dread
+    if(!soundEnabled)return;
+    [300,280,260,240,220,200,180,160].forEach((f,i)=>setTimeout(()=>beep(f,200,0.06),i*120));
+    setTimeout(()=>{[160,200,260,330].forEach((f,i)=>setTimeout(()=>beep(f,150,0.05),i*100))},1000);
+}
+function sfxCombatStart(){
+    // Sharp clash
+    if(!soundEnabled)return;
+    beep(350,60,0.07);setTimeout(()=>beep(500,50,0.06),70);
+}
+
+// --- Visual Feedback ---
+function screenShake(heavy=false){
+    const el=document.getElementById('game-container');
+    if(!el)return;
+    el.classList.remove('shake','shake-heavy');
+    void el.offsetWidth; // force reflow
+    el.classList.add(heavy?'shake-heavy':'shake');
+    setTimeout(()=>el.classList.remove('shake','shake-heavy'),heavy?500:300);
+}
+
+function flashDamage(){
+    const el=document.getElementById('damage-flash');
+    if(!el)return;
+    el.classList.add('active');
+    setTimeout(()=>el.classList.remove('active'),200);
+}
+
+function flashGold(){
+    const el=document.getElementById('gold-flash');
+    if(!el)return;
+    el.classList.add('active');
+    setTimeout(()=>el.classList.remove('active'),300);
+}
+
+function flashCombatStart(){
+    const el=document.getElementById('combat-flash');
+    if(!el)return;
+    el.classList.remove('active');
+    void el.offsetWidth;
+    el.classList.add('active');
+    setTimeout(()=>el.classList.remove('active'),800);
+}
+
+function showEventBanner(text, style=''){
+    const el=document.getElementById('event-banner');
+    if(!el)return;
+    el.textContent=text;
+    el.className='';
+    if(style)el.classList.add(style);
+    void el.offsetWidth;
+    el.classList.add('active');
+    setTimeout(()=>{el.classList.remove('active');el.className=''},2000);
+}
+
+// --- Kill Streak System ---
+let killStreak=0;
+let killStreakTimer=null;
+const STREAK_MESSAGES=[
+    null,null,null, // 0,1,2 = no message
+    '☠ Blood-drunk (3 kills)',
+    '☠ Slaughter (4 kills)',
+    '💀 MASSACRE (5 kills)',
+    '💀 UNSTOPPABLE (6 kills)',
+    '🔥 DOOM INCARNATE (7+ kills)',
+];
+
+function registerKill(){
+    killStreak++;
+    if(killStreakTimer)clearTimeout(killStreakTimer);
+    // Reset streak after 45 seconds of no kills
+    killStreakTimer=setTimeout(()=>{killStreak=0},45000);
+    if(killStreak>=3){
+        const msg=STREAK_MESSAGES[Math.min(killStreak,7)];
+        showStreakToast(msg);
+    }
+}
+
+function showStreakToast(text){
+    const el=document.getElementById('streak-toast');
+    if(!el)return;
+    el.textContent=text;
+    el.classList.remove('active');
+    void el.offsetWidth;
+    el.classList.add('active');
+    setTimeout(()=>el.classList.remove('active'),2500);
+}
+
+// --- Tension Buildup System ---
+let roomsSinceEncounter=0;
+const TENSION_MESSAGES=[
+    "The silence is wrong...",
+    "Something watches from the dark...",
+    "You feel eyes on the back of your neck...",
+    "The walls are breathing...",
+    "A chill runs down your spine...",
+    "The shadows lean closer...",
+    "You hear something that isn't footsteps...",
+    "The dark presses against your torch...",
+];
+
+function tickTension(){
+    if(!game||inCombat)return;
+    roomsSinceEncounter++;
+    if(roomsSinceEncounter>=3&&Math.random()<0.4){
+        const msg=pick(TENSION_MESSAGES);
+        addMsg(msg,'dim');
+        // Subtle low tone
+        if(soundEnabled)beep(90,300,0.02);
+        roomsSinceEncounter=0;
+    }
+}
+
+function resetTension(){roomsSinceEncounter=0}
 
 // ========== DUNGEON MUSIC (chiptune, DQ1-inspired) ==========
 // Looping melodic chiptune that gets darker with depth.
@@ -2758,6 +3013,7 @@ function rollEnemyIntent(enemy) {
         if(enemy._specialCd<=0&&!enemy._specialTelegraphed){
             enemy._specialTelegraphed=true;
             enemy.intent=`⚡ ${spec.telegraph}`;
+            sfxTelegraph();
             return;
         }
     }
@@ -2784,6 +3040,8 @@ function movePlayer(dx,dy){
         if(room.specialType&&!room.specialHandled){triggerSpecialRoom(room);return}
         // Floor event trigger
         if(room._hasFloorEvent&&!room._floorEventHandled){triggerFloorEvent(room);return}
+        // Tension buildup — entering a room with no event
+        tickTension();
     }
 
     // Offer rest in naturally empty rooms (no enemies, no shop, no boss)
@@ -2881,7 +3139,7 @@ function openChest(chest){
     }
     if(chest.type==='trapped'){
         if(Math.random()<p.disarmTrap+getTrinketPassive('disarm_trap'))addMsg("You disarm the trap!",'hp');
-        else{sfxTrap();const d=randInt(3,8+p.floor);p.hp-=d;addMsg(`TRAP! You take ${d} damage!`,'enemy');if(p.isDead())return}
+        else{sfxTrap();const d=randInt(3,8+p.floor);p.hp-=d;addMsg(`TRAP! You take ${d} damage!`,'enemy');flashDamage();screenShake();if(p.isDead())return}
     }
     chest.opened=true;sfxChest();
     const item=chest.item;
@@ -2896,7 +3154,11 @@ let combatEnemy=null,combatRoom=null,combatLog=[];
 
 function startCombat(enemy,room){
     inCombat=true;combatEnemy=enemy;combatRoom=room;combatLog=[];
-    if(enemy.isBoss)sfxBoss();else sfxHit();
+    resetTension();
+    flashCombatStart();
+    if(enemy.isBoss){sfxBossFanfare();showEventBanner(`⚔ ${enemy.name.toUpperCase()}`,'danger')}
+    else if(enemy.isElite){sfxCombatStart();showEventBanner('★ ELITE ENCOUNTER','danger')}
+    else{sfxCombatStart();showEventBanner('☠ AMBUSH!','danger')}
     game.player.backstabReady=true;
     game.player.backstabUsedLastRound=false;
     game.player.defendCount=0;
@@ -2943,7 +3205,7 @@ function startCombat(enemy,room){
     if(enemy.role==='ambusher'&&!enemy.isBoss){
         const d=Math.floor(enemy.attack*0.3);
         game.player.hp-=d;
-        combatLog.push({text:`Ambush! ${enemy.name} strikes first for ${d}!`,cls:'enemy'});
+        combatLog.push({text:`Ambush! ${enemy.name} strikes first for ${d}!`,cls:'enemy'});flashDamage();screenShake();
     }
     rollEnemyIntent(enemy);
     renderCombat();
@@ -3127,6 +3389,7 @@ function enemyAttack(e, p) {
         e._specialTelegraphed=false;
         e._specialCd=spec.cooldown;
         spec.effect(e,p,combatLog);
+        flashDamage();screenShake(true);
         return;
     }
     // Trinket: dodge chance
@@ -3141,7 +3404,7 @@ function enemyAttack(e, p) {
     // Curse boss damage bonus
     if (hasStatus(p, 'curse') && e.isBoss) d = Math.floor(d * 1.1);
     d = absorbBarrier(p, d);
-    p.hp -= d; sfxPlayerHit();
+    p.hp -= d; sfxPlayerHit(); flashDamage(); screenShake(e.isBoss||d>=15);
     combatLog.push({ text: `${e.name} hits you for ${d} damage!`, cls: 'enemy' });
     // Trinket: thorns
     const thornsVal=getTrinketPassive('thorns');
@@ -3161,7 +3424,7 @@ function processBossMechanic(e, p, action) {
     const turn = p.combatTurn;
     if (m.id === 'swarm_split' && turn % 3 === 0) {
         const d = randInt(2, 5); p.hp -= d;
-        combatLog.push({ text: `Rat swarms deal ${d} damage!`, cls: 'enemy' });
+        combatLog.push({ text: `Rat swarms deal ${d} damage!`, cls: 'enemy' });flashDamage();screenShake();
     }
     if (m.id === 'bone_reform' && p.lastActions.length >= 2 && p.lastActions.slice(-2).every(a => a === 'defend')) {
         e.hp = Math.min(e.maxHp, e.hp + 10);
@@ -3169,7 +3432,7 @@ function processBossMechanic(e, p, action) {
     }
     if (m.id === 'toxic_cloud' && turn % 2 === 0) {
         applyStatus(p, 'poison', 3, 3);
-        combatLog.push({ text: "Toxic cloud! You are poisoned!", cls: 'enemy' });
+        combatLog.push({ text: "Toxic cloud! You are poisoned!", cls: 'enemy' });flashDamage();
     }
     if (m.id === 'item_lock' && turn % 4 === 0) {
         p.itemLockTurns = 2;
@@ -3178,7 +3441,7 @@ function processBossMechanic(e, p, action) {
     if (m.id === 'shadow_breath' && turn % 3 === 0) {
         const d = Math.floor(getEffectiveAttack(e) * 0.8);
         const absorbed = absorbBarrier(p, d);
-        p.hp -= absorbed; combatLog.push({ text: `Shadow Breath! ${absorbed} damage!`, cls: 'boss' });
+        p.hp -= absorbed; combatLog.push({ text: `Shadow Breath! ${absorbed} damage!`, cls: 'boss' });flashDamage();screenShake(true);
     }
     if (m.id === 'life_drain') {
         // Applied after enemy attack via trait-like check in damage calc — handled by heal in enemyAttack
@@ -3383,6 +3646,7 @@ function tryRest(){
     const room=game.getCurrentRoom();
     const idx=game.rooms.indexOf(room);
     game.restedRooms.add(idx);
+    killStreak=0; // resting breaks kill momentum
     const outcome=rollRestOutcome(p);
     addMsg(`— ${outcome.title} —`,'cyan');
     addMsg(outcome.flavor,'dim');
@@ -3397,13 +3661,15 @@ function tryRest(){
         if(nearest)addMsg(`The dead fingers twitch toward the ${nearest.name}, ${nd} tiles away.`,'dim');
     }
     outcome.apply(p);
+    // Rest outcome sound and visual feedback
+    if(outcome.quality>=3){sfxRestGood()}else{sfxRestBad();flashDamage();screenShake(outcome.quality===0)}
     pendingRestRoom=null;
     if(p.isDead()){handleDeath();return}
     renderAll();checkEndState();
 }
 
 function handleEnemyDefeat(enemy){
-    const p=game.player;sfxKill();
+    const p=game.player;sfxKill();registerKill();
     addMsg(`Defeated ${enemy.name}! (+${enemy.xp} XP)`,'hp');
     combatLog.push({text:`${enemy.name} defeated!`,cls:'hp'});
     p.kills++;
@@ -3951,6 +4217,9 @@ const SHRINE_NAMES = [
 function triggerSpecialRoom(room){
     if(!room.specialType||room.specialHandled)return;
     room.specialHandled=true;
+    sfxSpecialRoom();
+    showEventBanner('🕯 A PRESENCE...','holy');
+    resetTension();
     if(game.analytics)game.analytics.specialRoomsVisited++;
     const srt=room.specialType;
     let displayName=srt.name;
