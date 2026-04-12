@@ -1856,65 +1856,164 @@ function sfxSave(){beep(600,50);setTimeout(()=>beep(800,80),60)}
 function sfxBlock(){beep(250,80)} function sfxFlee(){beep(300,50);setTimeout(()=>beep(250,50),60)}
 function sfxStairs(){[300,400,500,600].forEach((f,i)=>setTimeout(()=>beep(f,80),i*80))}
 
-// ========== AMBIENT SOUND/MUSIC ==========
-let ambientNodes=null;
-function startAmbient(floor){
-    stopAmbient();
-    if(!soundEnabled)return;
+// ========== DUNGEON MUSIC (chiptune, DQ1-inspired) ==========
+// Looping melodic chiptune that gets darker with depth.
+// 4 tiers of music, each with melody + bass + arpeggio voices.
+let musicTimer=null;
+let musicPlaying=false;
+
+// Note helper: converts note name to frequency
+const NOTE_FREQ={
+    'C3':130.81,'D3':146.83,'Eb3':155.56,'E3':164.81,'F3':174.61,'G3':196.00,'Ab3':207.65,'A3':220.00,'Bb3':233.08,'B3':246.94,
+    'C4':261.63,'D4':293.66,'Eb4':311.13,'E4':329.63,'F4':349.23,'G4':392.00,'Ab4':415.30,'A4':440.00,'Bb4':466.16,'B4':493.88,
+    'C5':523.25,'D5':587.33,'Eb5':622.25,'E5':659.26,'F5':698.46,'G5':783.99,'Ab5':830.61,'A5':880.00,'Bb5':932.33,'B5':987.77,
+    'C2':65.41,'D2':73.42,'Eb2':77.78,'E2':82.41,'F2':87.31,'G2':98.00,'Ab2':103.83,'A2':110.00,'Bb2':116.54,'B2':123.47,
+    'R':0 // rest
+};
+
+function chipNote(freq,dur,type,vol,startTime){
+    if(freq===0)return; // rest
     try{
-        // Tier determines mood: 0-10 eerie, 11-20 dread, 21-30 oppressive, 31-40 hellish
-        const tier=Math.min(3,Math.floor((floor-1)/10));
-        const baseFreqs=[[55,82,110],[48,72,96],[40,60,80],[33,50,66]];
-        const freqs=baseFreqs[tier];
-        const detune=[0,-5,7][tier]||0;
-        const nodes=[];
-        // Drone layer 1: deep bass
-        const o1=audioCtx.createOscillator();const g1=audioCtx.createGain();
-        o1.type='sine';o1.frequency.value=freqs[0];o1.detune.value=detune;
-        g1.gain.value=0.012;o1.connect(g1);g1.connect(audioCtx.destination);
-        // Drone layer 2: mid hum
-        const o2=audioCtx.createOscillator();const g2=audioCtx.createGain();
-        o2.type='triangle';o2.frequency.value=freqs[1];o2.detune.value=-detune;
-        g2.gain.value=0.008;o2.connect(g2);g2.connect(audioCtx.destination);
-        // Drone layer 3: high tension
-        const o3=audioCtx.createOscillator();const g3=audioCtx.createGain();
-        o3.type='sawtooth';o3.frequency.value=freqs[2];
-        g3.gain.value=0.004+tier*0.002;o3.connect(g3);g3.connect(audioCtx.destination);
-        // LFO for slow pulsing
-        const lfo=audioCtx.createOscillator();const lfoGain=audioCtx.createGain();
-        lfo.type='sine';lfo.frequency.value=0.15+tier*0.05;
-        lfoGain.gain.value=0.005;lfo.connect(lfoGain);lfoGain.connect(g1.gain);
-        o1.start();o2.start();o3.start();lfo.start();
-        nodes.push({o:o1,g:g1},{o:o2,g:g2},{o:o3,g:g3},{o:lfo,g:lfoGain});
-        ambientNodes=nodes;
+        const o=audioCtx.createOscillator();
+        const g=audioCtx.createGain();
+        o.type=type;o.frequency.value=freq;
+        o.connect(g);g.connect(audioCtx.destination);
+        // Envelope: quick attack, sustain, release
+        g.gain.setValueAtTime(0,startTime);
+        g.gain.linearRampToValueAtTime(vol,startTime+0.01);
+        g.gain.setValueAtTime(vol,startTime+dur*0.7);
+        g.gain.linearRampToValueAtTime(0,startTime+dur*0.95);
+        o.start(startTime);o.stop(startTime+dur);
     }catch(e){}
 }
-function stopAmbient(){
-    if(!ambientNodes)return;
-    for(const n of ambientNodes){try{n.o.stop()}catch(e){}}
-    ambientNodes=null;
+
+// Each tier has: melody (square), bass (triangle), arp (pulse/square quieter)
+// Tempo: ~140 BPM → eighth note = ~0.214s
+const MUSIC_TIERS=[
+    // Tier 0 (Floors 1-10): Eerie dungeon — D minor, cautious and foreboding
+    {bpm:132, melody:[
+        // Phrase A: descending minor motif
+        'D4','F4','E4','D4', 'A3','Bb3','A3','R',
+        'D4','F4','G4','F4', 'E4','D4','C4','R',
+        // Phrase B: rising tension
+        'A3','D4','F4','A4', 'G4','F4','E4','D4',
+        'Bb3','A3','G3','A3', 'D4','R','R','R',
+     ],bass:[
+        'D2','D2','D2','D2', 'A2','A2','A2','A2',
+        'Bb2','Bb2','Bb2','Bb2', 'A2','A2','A2','A2',
+        'D2','D2','F2','F2', 'G2','G2','A2','A2',
+        'Bb2','Bb2','A2','A2', 'D2','D2','D2','D2',
+     ],arp:[
+        'D3','F3','A3','F3', 'A3','E3','A3','E3',
+        'Bb3','D3','F3','D3', 'A3','C3','E3','C3',
+        'D3','F3','A3','D3', 'G3','Bb3','D3','Bb3',
+        'Bb3','D3','F3','D3', 'A3','D3','F3','D3',
+     ]},
+    // Tier 1 (Floors 11-20): Dread — C minor, more urgent and dark
+    {bpm:140, melody:[
+        'C4','Eb4','G4','Eb4', 'F4','Eb4','D4','C4',
+        'Ab3','Bb3','C4','Eb4', 'D4','C4','Bb3','R',
+        'G4','F4','Eb4','D4', 'C4','Eb4','F4','G4',
+        'Ab4','G4','F4','Eb4', 'D4','C4','R','R',
+     ],bass:[
+        'C2','C2','C2','C2', 'F2','F2','F2','F2',
+        'Ab2','Ab2','Ab2','Ab2', 'G2','G2','G2','G2',
+        'Eb2','Eb2','Eb2','Eb2', 'C2','C2','C2','C2',
+        'Ab2','Ab2','G2','G2', 'C2','C2','C2','C2',
+     ],arp:[
+        'C3','Eb3','G3','Eb3', 'F3','Ab3','C3','Ab3',
+        'Ab3','C3','Eb3','C3', 'G3','Bb3','D3','Bb3',
+        'Eb3','G3','Bb3','G3', 'C3','Eb3','G3','Eb3',
+        'Ab3','C3','Eb3','G3', 'G3','B3','D3','B3',
+     ]},
+    // Tier 2 (Floors 21-30): Oppressive — Bb minor, heavy and relentless
+    {bpm:148, melody:[
+        'Bb3','Db4','F4','Gb4', 'F4','Eb4','Db4','Bb3',
+        'Ab3','Bb3','Db4','Eb4', 'Db4','Bb3','Ab3','R',
+        'F4','Gb4','Ab4','Bb4', 'Ab4','Gb4','F4','Eb4',
+        'Db4','Eb4','F4','Db4', 'Bb3','R','R','R',
+     ],bass:[
+        'Bb2','Bb2','Bb2','Bb2', 'Gb2','Gb2','Gb2','Gb2',
+        'Ab2','Ab2','Ab2','Ab2', 'Eb2','Eb2','Eb2','Eb2',
+        'F2','F2','F2','F2', 'Db2','Db2','Db2','Db2',
+        'Gb2','Gb2','F2','F2', 'Bb2','Bb2','Bb2','Bb2',
+     ],arp:[
+        'Bb3','Db3','F3','Db3', 'Gb3','Bb3','Db3','Bb3',
+        'Ab3','C3','Eb3','C3', 'Eb3','Gb3','Bb3','Gb3',
+        'F3','Ab3','Db3','Ab3', 'Db3','F3','Ab3','F3',
+        'Gb3','Bb3','Db3','F3', 'F3','Bb3','Db3','Bb3',
+     ]},
+    // Tier 3 (Floors 31-40): Hellish — Ab minor, frantic and doom-laden
+    {bpm:156, melody:[
+        'Ab4','B4','E4','Ab4', 'G4','E4','D4','B3',
+        'Ab3','B3','D4','E4', 'G4','Ab4','B4','Ab4',
+        'E4','D4','B3','Ab3', 'B3','D4','E4','G4',
+        'Ab4','G4','E4','D4', 'B3','Ab3','R','R',
+     ],bass:[
+        'Ab2','Ab2','Ab2','Ab2', 'E2','E2','E2','E2',
+        'Ab2','Ab2','B2','B2', 'E2','E2','E2','E2',
+        'Ab2','Ab2','D2','D2', 'B2','B2','E2','E2',
+        'Ab2','Ab2','E2','E2', 'Ab2','Ab2','Ab2','Ab2',
+     ],arp:[
+        'Ab3','B3','E3','B3', 'E3','G3','B3','G3',
+        'Ab3','B3','D3','B3', 'E3','Ab3','B3','Ab3',
+        'E3','G3','B3','G3', 'B3','D3','E3','D3',
+        'Ab3','B3','E3','G3', 'E3','Ab3','B3','Ab3',
+     ]},
+];
+
+// Note name remapping for flats/sharps not in the table
+function noteFreq(n){
+    if(NOTE_FREQ[n]!==undefined)return NOTE_FREQ[n];
+    // Handle Db, Gb etc by enharmonic equivalents
+    const map={'Db2':69.30,'Db3':138.59,'Db4':277.18,'Db5':554.37,
+               'Gb2':92.50,'Gb3':185.00,'Gb4':369.99,'Gb5':739.99,
+               'B3':246.94,'B4':493.88,'B5':987.77};
+    return map[n]||0;
 }
+
+function startMusic(floor){
+    stopMusic();
+    if(!soundEnabled)return;
+    musicPlaying=true;
+    const tier=Math.min(3,Math.floor((floor-1)/10));
+    const t=MUSIC_TIERS[tier];
+    const eighthNote=60/t.bpm/2; // duration of one eighth note
+    const loopLen=t.melody.length*eighthNote;
+    const melVol=0.035;
+    const bassVol=0.03;
+    const arpVol=0.018;
+
+    function scheduleLoop(){
+        if(!musicPlaying)return;
+        const now=audioCtx.currentTime+0.05;
+        for(let i=0;i<t.melody.length;i++){
+            const time=now+i*eighthNote;
+            // Melody voice: square wave
+            chipNote(noteFreq(t.melody[i]),eighthNote*0.9,'square',melVol,time);
+            // Bass voice: triangle wave
+            chipNote(noteFreq(t.bass[i]),eighthNote*0.9,'triangle',bassVol,time);
+            // Arpeggio voice: quieter square
+            chipNote(noteFreq(t.arp[i]),eighthNote*0.45,'square',arpVol,time);
+        }
+        // Schedule next loop
+        musicTimer=setTimeout(scheduleLoop,(loopLen-0.1)*1000);
+    }
+    scheduleLoop();
+}
+
+function stopMusic(){
+    musicPlaying=false;
+    if(musicTimer){clearTimeout(musicTimer);musicTimer=null}
+}
+
 function updateAmbientForFloor(floor){
-    if(!soundEnabled){stopAmbient();return}
-    startAmbient(floor);
+    if(!soundEnabled){stopMusic();return}
+    startMusic(floor);
 }
-// Ambient stinger: plays a short creepy sound randomly during exploration
-let lastStingerTime=0;
-function maybePlayStinger(){
-    if(!soundEnabled||!game||inCombat)return;
-    const now=Date.now();
-    if(now-lastStingerTime<30000)return; // at most every 30s
-    if(Math.random()>0.08)return; // 8% chance per move
-    lastStingerTime=now;
-    const tier=Math.min(3,Math.floor((game.player.floor-1)/10));
-    const stingers=[
-        ()=>{beep(80+Math.random()*40,800,0.015)}, // low moan
-        ()=>{beep(200+Math.random()*100,200,0.01);setTimeout(()=>beep(150,300,0.008),250)}, // distant scrape
-        ()=>{beep(400+tier*50,100,0.006);setTimeout(()=>beep(350+tier*40,150,0.005),120)}, // whisper
-        ()=>{[1,2,3].forEach((_,i)=>setTimeout(()=>beep(60+i*10,150,0.01),i*200))}, // footsteps
-    ];
-    pick(stingers)();
-}
+
+// Keep old function names as aliases for existing call sites
+function stopAmbient(){stopMusic()}
 
 // ========== GAME STATE ==========
 let game = null;
@@ -2675,7 +2774,7 @@ function movePlayer(dx,dy){
     const p=game.player,nx=p.x+dx,ny=p.y+dy;
     if(nx<0||nx>=MAP_W||ny<0||ny>=MAP_H)return;
     if(game.grid[ny][nx]==='#')return;
-    p.x=nx;p.y=ny;sfxStep();maybePlayStinger();
+    p.x=nx;p.y=ny;sfxStep();
 
     const room=game.getCurrentRoom();
     if(pendingRestRoom&&pendingRestRoom!==room)pendingRestRoom=null;
