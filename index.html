@@ -2269,9 +2269,9 @@ function startMusic(floor){
     const t=MUSIC_TIERS[tier];
     const eighthNote=60/t.bpm/2; // duration of one eighth note
     const loopLen=t.melody.length*eighthNote;
-    const melVol=0.035;
-    const bassVol=0.03;
-    const arpVol=0.018;
+    const melVol=0.022;
+    const bassVol=0.018;
+    const arpVol=0.011;
 
     function scheduleLoop(){
         if(!musicPlaying)return;
