@@ -68,6 +68,40 @@ body {
 .shrine-color { color: #ff0; font-weight: bold; text-shadow: 0 0 6px #ff0; }
 .campfire-color { color: #f93; font-weight: bold; text-shadow: 0 0 6px #f60; }
 
+/* ===== Epilogue crawl ===== */
+#epilogue-screen {
+    display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+    background:#000;z-index:10000;overflow:hidden;
+    flex-direction:column;align-items:center;justify-content:center;
+}
+#epilogue-text {
+    font-family:'Courier New',monospace;color:#888;font-size:14px;
+    max-width:600px;width:90%;text-align:center;line-height:1.8;
+    opacity:0;transition:opacity 1.5s ease;
+}
+#epilogue-text.visible { opacity:1; }
+#epilogue-text .epi-line {
+    opacity:0;transform:translateY(10px);
+    transition:opacity 1.2s ease,transform 1.2s ease;
+    margin:6px 0;
+}
+#epilogue-text .epi-line.show { opacity:1;transform:translateY(0); }
+#epilogue-text .epi-highlight { color:#f93; }
+#epilogue-text .epi-dim { color:#555; }
+#epilogue-text .epi-bright { color:#ccc; }
+#epilogue-stats {
+    margin-top:20px;font-size:11px;color:#555;
+    opacity:0;transition:opacity 2s ease;
+}
+#epilogue-stats.visible { opacity:1; }
+#epilogue-btn {
+    margin-top:20px;opacity:0;transition:opacity 1.5s ease;
+    background:transparent;border:1px solid #555;color:#888;
+    padding:10px 30px;font-family:monospace;cursor:pointer;font-size:13px;
+}
+#epilogue-btn.visible { opacity:1; }
+#epilogue-btn:hover { border-color:#f93;color:#f93; }
+
 /* ===== Loot drop toast ===== */
 #loot-toast-container {
     position: fixed;
@@ -992,6 +1026,13 @@ body {
 <div class="screen-box" id="end-box"></div>
 </div>
 
+<!-- Epilogue screen -->
+<div id="epilogue-screen">
+<div id="epilogue-text"></div>
+<div id="epilogue-stats"></div>
+<button id="epilogue-btn" onclick="location.reload()">Descend again</button>
+</div>
+
 <script>
 // ========== GAME DATA ==========
 const MAP_W = 50, MAP_H = 25, MAX_ROOMS = 10, MAX_FLOOR = 40, STARTING_LIVES = 3;
@@ -1396,6 +1437,168 @@ const FLOOR_MUTATORS = [
     {id:'fortified',name:'Fortified',desc:'Enemies +15% HP, +25% XP',icon:'🏰',effects:{enemyHpMult:1.15,xpMult:1.25}},
 ];
 
+// ========== FLOOR EVENTS / RANDOM ENCOUNTERS ==========
+const FLOOR_EVENTS = [
+    {id:'dying_adventurer', weight:15,
+     title:'A Dying Adventurer',
+     desc:'A figure slumped against the wall raises a trembling hand. Their eyes are already clouding.',
+     choices:[
+         {text:'Search the body', action:(p)=>{
+             if(Math.random()<0.6){const g=randInt(15,40);p.gold+=g;addMsg(`You find ${g} gold in their pockets. They don't flinch.`,'gold')}
+             else{const item=cloneItem(pick(ITEM_TYPES.filter(i=>i.type==='heal')));p.inventory.push(item);addMsg(`A ${item.name} falls from their grip. Still warm.`,'item')}
+         }},
+         {text:'Listen to their last words', action:(p)=>{
+             const xp=8+p.floor*2;p.gainXp(xp);addMsg(`"...the walls are not walls..." (+${xp} XP)`,'xp');
+             if(Math.random()<0.3)addMsg("Their mouth keeps moving after the breathing stops.",'dim');
+         }},
+         {text:'End their suffering', action:(p)=>{
+             p.bonusAttack+=1;p.recalcStats();addMsg("Something hardens inside you. ATK +1",'hp');
+             addMsg("The dungeon hums approvingly.",'dim');
+         }},
+     ]},
+    {id:'whispering_wall', weight:20,
+     title:'The Whispering Wall',
+     desc:'A section of wall is covered in tiny mouths, all murmuring in unison. The words are almost recognizable.',
+     choices:[
+         {text:'Press your ear close', action:(p)=>{
+             if(Math.random()<0.5){const xp=12+p.floor*3;p.gainXp(xp);addMsg(`The whispers teach you something you wish you didn't know. (+${xp} XP)`,'xp')}
+             else{applyStatus(p,'curse',0,5);addMsg("The mouths press against your ear. Something crawls in.",'enemy')}
+         }},
+         {text:'Feed it something', action:(p)=>{
+             if(p.gold>=15){p.gold-=15;p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);addMsg("The mouths chew your coins. Your skin thickens. (+5 Max HP, -15 gold)",'hp')}
+             else addMsg("You have nothing it wants. The mouths frown.",'dim');
+         }},
+         {text:'Walk away quickly', action:(p)=>{
+             addMsg("You move on. The whispers follow for exactly thirteen steps, then stop.",'dim');
+         }},
+     ]},
+    {id:'blood_fountain', weight:12,
+     title:'A Fountain of Blood',
+     desc:'Dark liquid bubbles up from a cracked basin. It smells of iron and something older.',
+     choices:[
+         {text:'Drink from it', action:(p)=>{
+             if(Math.random()<0.4){const h=Math.floor(p.maxHp*0.5);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`The blood is warm going down. You feel whole. (+${h} HP)`,'hp')}
+             else{p.maxHp=Math.max(10,p.maxHp-5);p.hp=Math.min(p.maxHp,p.hp);addMsg("It tastes like memory. Something drains out of you. (-5 Max HP)",'enemy')}
+         }},
+         {text:'Wash your weapon in it', action:(p)=>{
+             p.bonusAttack+=2;p.recalcStats();addMsg("The blade drinks eagerly. It won't wash clean again. (+2 ATK)",'hp');
+         }},
+         {text:'Leave it alone', action:(p)=>{
+             addMsg("The fountain burbles. It sounds like laughter.",'dim');
+         }},
+     ]},
+    {id:'chained_door', weight:10,
+     title:'A Chained Door',
+     desc:'Heavy chains bind a door that shouldn\'t exist here. Something behind it breathes.',
+     choices:[
+         {text:'Break the chains (requires key)', action:(p)=>{
+             if(p.keys>0){p.keys--;
+                 if(Math.random()<0.5){const g=randInt(50,120);p.gold+=g;addMsg(`Behind the door: a forgotten treasury. +${g} gold!`,'gold');if(Math.random()<0.3)awardRelic('chained_door')}
+                 else{const d=randInt(10,25);p.hp-=d;addMsg(`The thing behind the door was not treasure. -${d} HP!`,'enemy')}
+             } else addMsg("The chains hold firm. You have no key.",'dim');
+         }},
+         {text:'Listen at the door', action:(p)=>{
+             const hints=['breathing','counting','praying in a language you almost understand','saying your name'];
+             addMsg(`You hear ${pick(hints)}. The chains rattle once, then stop.`,'dim');
+             if(BOSSES[p.floor])addMsg(`Something tells you the ${BOSSES[p.floor].name} fears what's in here.`,'boss');
+         }},
+         {text:'Walk away', action:(p)=>{
+             addMsg("You leave. Behind you, the chains clink — once — as if waving goodbye.",'dim');
+         }},
+     ]},
+    {id:'mirror_room', weight:10,
+     title:'A Shattered Mirror',
+     desc:'A tall mirror leans against the wall. Your reflection moves a half-second too late.',
+     choices:[
+         {text:'Touch the mirror', action:(p)=>{
+             if(Math.random()<0.5){p.bonusDefense+=2;p.recalcStats();addMsg("Your reflection reaches out and presses something cold into your hand. DEF +2",'hp')}
+             else{const d=randInt(5,12);p.hp-=d;addMsg(`Your reflection grabs your wrist. Nails dig in. -${d} HP`,'enemy')}
+         }},
+         {text:'Look into your own eyes', action:(p)=>{
+             const xp=15+p.floor*2;p.gainXp(xp);addMsg(`You see every version of yourself that died here. You learn from them. +${xp} XP`,'xp');
+         }},
+         {text:'Smash it', action:(p)=>{
+             addMsg("The glass shatters. From every shard, a different you watches silently.",'dim');
+             p.bonusAttack+=1;p.recalcStats();addMsg("The anger feels good. ATK +1",'hp');
+         }},
+     ]},
+    {id:'crawling_corpse', weight:8,
+     title:'The Crawling Corpse',
+     desc:'A body drags itself across the floor, leaving a wet trail. It holds something in its fist.',
+     choices:[
+         {text:'Pry its hand open', action:(p)=>{
+             if(Math.random()<0.7){const item=cloneItem(pick(ITEM_TYPES));p.inventory.push(item);addMsg(`Its fingers uncurl. Inside: ${item.name}. The hand keeps grasping at nothing.`,'item')}
+             else{const d=randInt(3,8);p.hp-=d;addMsg(`It bites you. Of course it bites you. -${d} HP`,'enemy')}
+         }},
+         {text:'Follow it', action:(p)=>{
+             const xp=10+p.floor*2;p.gainXp(xp);addMsg(`It leads you to a dead end. There is writing on the wall: 'THIS IS WHERE I STOPPED BEING ME'. +${xp} XP`,'xp');
+         }},
+         {text:'Put it out of its misery', action:(p)=>{
+             const g=randInt(5,20);p.gold+=g;addMsg(`It stops. A few coins spill from its mouth. +${g} gold`,'gold');
+         }},
+     ]},
+    {id:'weeping_statue', weight:12,
+     title:'A Weeping Statue',
+     desc:'A stone figure kneels, face in hands. Real tears streak its cheeks. They never dry.',
+     choices:[
+         {text:'Collect the tears', action:(p)=>{
+             const h=Math.floor(p.maxHp*0.3);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`The tears burn, then heal. +${h} HP`,'hp');
+         }},
+         {text:'Pray with it', action:(p)=>{
+             if(Math.random()<0.6){p.bonusDefense+=1;p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);addMsg("Something old and sad blesses you. DEF +1, Max HP +5",'hp')}
+             else{addMsg("It stops crying. It looks at you. You wish it hadn't.",'dim')}
+         }},
+         {text:'Ignore it', action:(p)=>{
+             addMsg("You walk past. The crying gets louder the further away you go.",'dim');
+         }},
+     ]},
+    {id:'old_campfire', weight:15,
+     title:'An Old Campfire',
+     desc:'Long-dead embers in a ring of stones. Someone scratched tally marks into the floor. They stopped at forty.',
+     choices:[
+         {text:'Search the ashes', action:(p)=>{
+             if(Math.random()<0.5){const g=randInt(10,30);p.gold+=g;addMsg(`Among the ashes: melted coins. +${g} gold`,'gold')}
+             else{const item=cloneItem(pick(ITEM_TYPES.filter(i=>i.type==='heal')));p.inventory.push(item);addMsg(`Hidden under a stone: ${item.name}`,'item')}
+         }},
+         {text:'Rest here briefly', action:(p)=>{
+             const h=Math.floor(p.maxHp*0.15);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`The stones still hold warmth. It shouldn't be possible. +${h} HP`,'hp');
+         }},
+         {text:'Count the tally marks', action:(p)=>{
+             const xp=8+p.floor*2;p.gainXp(xp);addMsg(`Forty marks. One for each floor. The last one is fresher than the others. +${xp} XP`,'xp');
+         }},
+     ]},
+];
+
+function rollFloorEvent(){
+    const total=FLOOR_EVENTS.reduce((s,e)=>s+e.weight,0);
+    let r=Math.random()*total;
+    for(const ev of FLOOR_EVENTS){r-=ev.weight;if(r<=0)return ev}
+    return FLOOR_EVENTS[0];
+}
+
+function triggerFloorEvent(room){
+    const ev=rollFloorEvent();
+    room._floorEvent=ev;room._floorEventHandled=true;
+    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    html+=`<h2 style="color:#f93">${ev.title.toUpperCase()}</h2><p style="color:#bbb;margin-bottom:12px">${ev.desc}</p>`;
+    ev.choices.forEach((c,i)=>{
+        html+=`<div><button onclick="handleFloorEvent(${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
+    });
+    document.getElementById('item-box').innerHTML=html;
+    document.getElementById('item-screen').style.display='flex';
+}
+
+function handleFloorEvent(choiceIdx){
+    document.getElementById('item-screen').style.display='none';
+    const room=game.getCurrentRoom();
+    if(!room||!room._floorEvent)return;
+    const ev=room._floorEvent;
+    const p=game.player;
+    if(ev.choices[choiceIdx]&&ev.choices[choiceIdx].action)ev.choices[choiceIdx].action(p);
+    if(p.isDead())handleDeath();
+    renderAll();checkEndState();
+}
+
 // ========== V1.1 SPECIAL ROOMS ==========
 const SPECIAL_ROOM_TYPES = [
     {id:'shrine',name:'Shrine',char:'+',color:'shrine',chance:0.04,desc:'A glowing altar hums with divine energy.',
@@ -1474,6 +1677,105 @@ const BOSS_MECHANICS = {
     40:{id:'royal_decree',name:'Royal Decree',desc:'Alternates between damage immunity and vulnerability',telegraph:"'KNEEL BEFORE YOUR KING!'",counterplay:'Attack only during vulnerable phases'},
 };
 
+// ========== ENEMY SPECIAL ABILITIES ==========
+const ENEMY_SPECIALS = {
+    'Cave Spider': {id:'web_wrap',name:'Web Wrap',cooldown:4,
+        telegraph:'The spider is spinning silk rapidly...',
+        effect:(e,p,log)=>{
+            applyStatus(p,'stun',0,1);
+            const d=Math.floor(e.attack*0.5);p.hp-=d;
+            log.push({text:`Web Wrap! You're tangled! Stunned + ${d} damage!`,cls:'enemy'});
+        }},
+    'Wraith': {id:'phase_shift',name:'Phase Shift',cooldown:3,
+        telegraph:'The wraith flickers between worlds...',
+        effect:(e,p,log)=>{
+            applyStatus(e,'barrier',12,2);
+            e.hp=Math.min(e.maxHp,e.hp+Math.floor(e.maxHp*0.1));
+            log.push({text:`Phase Shift! The wraith becomes translucent and regenerates!`,cls:'enemy'});
+        }},
+    'Dark Wizard': {id:'dark_bolt',name:'Dark Bolt',cooldown:3,
+        telegraph:'Dark energy crackles between the wizard\'s hands...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*1.5);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            log.push({text:`DARK BOLT! ${absorbed} damage!`,cls:'enemy'});
+            if(Math.random()<0.3){applyStatus(p,'weaken',0,2);log.push({text:'The dark energy weakens you!',cls:'enemy'})}
+        }},
+    'Troll': {id:'regenerate',name:'Troll Regenerate',cooldown:3,
+        telegraph:'The troll\'s wounds begin knitting shut...',
+        effect:(e,p,log)=>{
+            const h=Math.floor(e.maxHp*0.2);e.hp=Math.min(e.maxHp,e.hp+h);
+            log.push({text:`Troll Regenerate! Heals ${h} HP!`,cls:'enemy'});
+        }},
+    'Necromancer': {id:'soul_drain',name:'Soul Drain',cooldown:4,
+        telegraph:'The necromancer begins a dark incantation...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*0.8);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            e.hp=Math.min(e.maxHp,e.hp+absorbed);
+            log.push({text:`Soul Drain! ${absorbed} damage, heals the necromancer!`,cls:'enemy'});
+        }},
+    'Shadow Assassin': {id:'shadow_strike',name:'Shadow Strike',cooldown:3,
+        telegraph:'The assassin vanishes into darkness...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*2);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            log.push({text:`SHADOW STRIKE! ${absorbed} damage from nowhere!`,cls:'enemy'});
+        }},
+    'Fire Elemental': {id:'eruption',name:'Eruption',cooldown:4,
+        telegraph:'The elemental glows white-hot...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*1.2);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            applyStatus(p,'burn',4,3);
+            log.push({text:`ERUPTION! ${absorbed} damage and you catch fire!`,cls:'enemy'});
+        }},
+    'Ice Golem': {id:'frost_slam',name:'Frost Slam',cooldown:4,
+        telegraph:'The golem raises both fists, frost spreading...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*1.3);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            applyStatus(p,'stun',0,1);
+            log.push({text:`FROST SLAM! ${absorbed} damage! You're frozen!`,cls:'enemy'});
+        }},
+    'Death Knight': {id:'cursed_blade',name:'Cursed Blade',cooldown:4,
+        telegraph:'The knight\'s blade pulses with necrotic energy...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*1.4);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            applyStatus(p,'curse',0,3);
+            log.push({text:`CURSED BLADE! ${absorbed} damage and cursed!`,cls:'enemy'});
+        }},
+    'Elder Demon': {id:'hellfire',name:'Hellfire',cooldown:3,
+        telegraph:'The demon opens its maw, hellfire building...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*1.6);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            applyStatus(p,'burn',5,3);
+            log.push({text:`HELLFIRE! ${absorbed} fire damage engulfs you!`,cls:'enemy'});
+        }},
+    'Orc Warlord': {id:'war_cry',name:'War Cry',cooldown:4,
+        telegraph:'The orc beats its chest and roars...',
+        effect:(e,p,log)=>{
+            applyStatus(e,'buff_atk',5,3);
+            const d=Math.floor(e.attack*0.6);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            log.push({text:`WAR CRY! The orc surges with fury! +5 ATK for 3 turns! ${absorbed} shockwave damage!`,cls:'enemy'});
+        }},
+    'Gargoyle': {id:'stone_form',name:'Stone Form',cooldown:5,
+        telegraph:'The gargoyle\'s skin turns to solid stone...',
+        effect:(e,p,log)=>{
+            applyStatus(e,'barrier',20,2);
+            log.push({text:`Stone Form! The gargoyle becomes nearly impervious!`,cls:'enemy'});
+        }},
+    'Mimic': {id:'devour',name:'Devour',cooldown:4,
+        telegraph:'The mimic\'s jaw unhinges impossibly wide...',
+        effect:(e,p,log)=>{
+            const d=Math.floor(e.attack*1.5);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            if(p.gold>0){const stolen=Math.min(p.gold,randInt(5,15));p.gold-=stolen;log.push({text:`DEVOUR! ${absorbed} damage and ${stolen} gold swallowed!`,cls:'enemy'})}
+            else log.push({text:`DEVOUR! ${absorbed} damage!`,cls:'enemy'});
+        }},
+    'Demon Imp': {id:'hellish_cackle',name:'Hellish Cackle',cooldown:3,
+        telegraph:'The imp\'s cackle grows shrill and piercing...',
+        effect:(e,p,log)=>{
+            applyStatus(p,'weaken',0,2);
+            const d=Math.floor(e.attack*0.7);const absorbed=absorbBarrier(p,d);p.hp-=absorbed;
+            log.push({text:`Hellish Cackle! Weakened! ${absorbed} psychic damage!`,cls:'enemy'});
+        }},
+};
+
 // ========== V1.1 INTENT TEMPLATES ==========
 const INTENT_TEMPLATES = {
     bruiser:['winding up a heavy strike','readying a powerful blow','preparing to crush you'],
@@ -1550,6 +1852,66 @@ function sfxSave(){beep(600,50);setTimeout(()=>beep(800,80),60)}
 function sfxBlock(){beep(250,80)} function sfxFlee(){beep(300,50);setTimeout(()=>beep(250,50),60)}
 function sfxStairs(){[300,400,500,600].forEach((f,i)=>setTimeout(()=>beep(f,80),i*80))}
 
+// ========== AMBIENT SOUND/MUSIC ==========
+let ambientNodes=null;
+function startAmbient(floor){
+    stopAmbient();
+    if(!soundEnabled)return;
+    try{
+        // Tier determines mood: 0-10 eerie, 11-20 dread, 21-30 oppressive, 31-40 hellish
+        const tier=Math.min(3,Math.floor((floor-1)/10));
+        const baseFreqs=[[55,82,110],[48,72,96],[40,60,80],[33,50,66]];
+        const freqs=baseFreqs[tier];
+        const detune=[0,-5,7][tier]||0;
+        const nodes=[];
+        // Drone layer 1: deep bass
+        const o1=audioCtx.createOscillator();const g1=audioCtx.createGain();
+        o1.type='sine';o1.frequency.value=freqs[0];o1.detune.value=detune;
+        g1.gain.value=0.012;o1.connect(g1);g1.connect(audioCtx.destination);
+        // Drone layer 2: mid hum
+        const o2=audioCtx.createOscillator();const g2=audioCtx.createGain();
+        o2.type='triangle';o2.frequency.value=freqs[1];o2.detune.value=-detune;
+        g2.gain.value=0.008;o2.connect(g2);g2.connect(audioCtx.destination);
+        // Drone layer 3: high tension
+        const o3=audioCtx.createOscillator();const g3=audioCtx.createGain();
+        o3.type='sawtooth';o3.frequency.value=freqs[2];
+        g3.gain.value=0.004+tier*0.002;o3.connect(g3);g3.connect(audioCtx.destination);
+        // LFO for slow pulsing
+        const lfo=audioCtx.createOscillator();const lfoGain=audioCtx.createGain();
+        lfo.type='sine';lfo.frequency.value=0.15+tier*0.05;
+        lfoGain.gain.value=0.005;lfo.connect(lfoGain);lfoGain.connect(g1.gain);
+        o1.start();o2.start();o3.start();lfo.start();
+        nodes.push({o:o1,g:g1},{o:o2,g:g2},{o:o3,g:g3},{o:lfo,g:lfoGain});
+        ambientNodes=nodes;
+    }catch(e){}
+}
+function stopAmbient(){
+    if(!ambientNodes)return;
+    for(const n of ambientNodes){try{n.o.stop()}catch(e){}}
+    ambientNodes=null;
+}
+function updateAmbientForFloor(floor){
+    if(!soundEnabled){stopAmbient();return}
+    startAmbient(floor);
+}
+// Ambient stinger: plays a short creepy sound randomly during exploration
+let lastStingerTime=0;
+function maybePlayStinger(){
+    if(!soundEnabled||!game||inCombat)return;
+    const now=Date.now();
+    if(now-lastStingerTime<30000)return; // at most every 30s
+    if(Math.random()>0.08)return; // 8% chance per move
+    lastStingerTime=now;
+    const tier=Math.min(3,Math.floor((game.player.floor-1)/10));
+    const stingers=[
+        ()=>{beep(80+Math.random()*40,800,0.015)}, // low moan
+        ()=>{beep(200+Math.random()*100,200,0.01);setTimeout(()=>beep(150,300,0.008),250)}, // distant scrape
+        ()=>{beep(400+tier*50,100,0.006);setTimeout(()=>beep(350+tier*40,150,0.005),120)}, // whisper
+        ()=>{[1,2,3].forEach((_,i)=>setTimeout(()=>beep(60+i*10,150,0.01),i*200))}, // footsteps
+    ];
+    pick(stingers)();
+}
+
 // ========== GAME STATE ==========
 let game = null;
 let messages = [];
@@ -1596,6 +1958,14 @@ function generateDungeon(floorNum) {
         sr.hasShop=true;sr.shopX=sr.cx+1;sr.shopY=sr.cy;
         if(sr.shopX<sr.x+sr.w-1&&grid[sr.shopY][sr.shopX]==='.')grid[sr.shopY][sr.shopX]='$';
         else sr.hasShop=false;
+    }
+
+    // Floor events: 1-2 random encounter rooms per floor
+    {
+        const eventEligible=rooms.filter((r,i)=>i>0&&i<rooms.length-1&&!r.hasShop&&!r.isBossRoom);
+        const eventCount=Math.min(eventEligible.length,randInt(1,2));
+        const shuffled=eventEligible.sort(()=>Math.random()-0.5).slice(0,eventCount);
+        for(const r of shuffled){r._hasFloorEvent=true;r._floorEventHandled=false}
     }
 
     // V1.1: Special rooms
@@ -1858,6 +2228,7 @@ class GameState {
         if(this.currentMutator)addMsg(`${this.currentMutator.icon} Mutator: ${this.currentMutator.name} — ${this.currentMutator.desc}`,'boss');
         addMsg(start.desc,'dim');
         if(BOSSES[this.player.floor])addMsg(`⚠ ${BOSSES[this.player.floor].name} lurks on this floor...`,'boss');
+        updateAmbientForFloor(this.player.floor);
     }
     getCurrentRoom(){
         return this.rooms.find(r=>this.player.x>=r.x&&this.player.x<r.x+r.w&&this.player.y>=r.y&&this.player.y<r.y+r.h)||null;
@@ -2277,6 +2648,16 @@ function rollEnemyIntent(enemy) {
         if (m.id === 'head_regrow' && (turn + 1) % 5 === 0) { enemy.intent = m.telegraph; return; }
         if (m.id === 'royal_decree') { enemy.intent = game.player.bossPhaseVulnerable ? 'The King lowers his guard...' : m.telegraph; return; }
     }
+    // Enemy special ability telegraph
+    const spec=ENEMY_SPECIALS[enemy.baseName||enemy.name];
+    if(spec&&!enemy.isBoss&&typeof enemy._specialCd==='number'){
+        enemy._specialCd--;
+        if(enemy._specialCd<=0&&!enemy._specialTelegraphed){
+            enemy._specialTelegraphed=true;
+            enemy.intent=`⚡ ${spec.telegraph}`;
+            return;
+        }
+    }
     enemy.intent = `${enemy.name} is ${pick(templates)}`;
 }
 
@@ -2290,7 +2671,7 @@ function movePlayer(dx,dy){
     const p=game.player,nx=p.x+dx,ny=p.y+dy;
     if(nx<0||nx>=MAP_W||ny<0||ny>=MAP_H)return;
     if(game.grid[ny][nx]==='#')return;
-    p.x=nx;p.y=ny;sfxStep();
+    p.x=nx;p.y=ny;sfxStep();maybePlayStinger();
 
     const room=game.getCurrentRoom();
     if(pendingRestRoom&&pendingRestRoom!==room)pendingRestRoom=null;
@@ -2298,6 +2679,8 @@ function movePlayer(dx,dy){
         room.visited=true;addMsg(room.desc,'dim');
         // V1.1: Special room trigger
         if(room.specialType&&!room.specialHandled){triggerSpecialRoom(room);return}
+        // Floor event trigger
+        if(room._hasFloorEvent&&!room._floorEventHandled){triggerFloorEvent(room);return}
     }
 
     // Offer rest in naturally empty rooms (no enemies, no shop, no boss)
@@ -2444,6 +2827,9 @@ function startCombat(enemy,room){
         const traitNames=enemy.traits.map(t=>t.name).join(', ');
         combatLog.push({text:`Traits: ${traitNames}`,cls:'dim'});
     }
+    // Initialize enemy special ability tracking
+    const spec=ENEMY_SPECIALS[enemy.baseName||enemy.name];
+    if(spec&&!enemy.isBoss){enemy._specialCd=spec.cooldown;enemy._specialReady=false;enemy._specialTelegraphed=false}
     // Blessed trait: start with Barrier
     if(enemy.traits&&enemy.traits.some(t=>t.id==='blessed'))applyStatus(enemy,'barrier',10,99);
     // Bone Ward relic: player starts with Barrier
@@ -2630,6 +3016,14 @@ function combatAction(action){
 }
 
 function enemyAttack(e, p) {
+    // Enemy special ability: fires after telegraph
+    const spec=ENEMY_SPECIALS[e.baseName||e.name];
+    if(spec&&!e.isBoss&&e._specialTelegraphed){
+        e._specialTelegraphed=false;
+        e._specialCd=spec.cooldown;
+        spec.effect(e,p,combatLog);
+        return;
+    }
     // Trinket: dodge chance
     const dodgeVal=getTrinketPassive('dodge_chance');
     if(dodgeVal>0&&Math.random()<dodgeVal){combatLog.push({text:"You dodge the attack!",cls:'xp'});return}
@@ -3812,27 +4206,11 @@ function handleDeath(){
 
 function checkEndState(){
     if(game.victory){
-        sfxVictory();deleteSave();
-        const p=game.player,a=game.analytics||{};
-        document.getElementById('end-box').innerHTML=`
-            <h1 style="color:#5f5">★ VICTORY! ★</h1>
-            <p>You defeated the Forgotten King and escaped!</p>
-            <p>Class: ${p.className} | Level: ${p.level}</p>
-            <p>Kills: ${p.kills} | Bosses: ${p.bossesKilled}</p>
-            <p>Gold: ${p.gold} | Lives: ${p.lives}</p>
-            <hr style="border-color:#333;margin:8px 0">
-            <h3 style="color:#f93;font-size:12px">RUN SUMMARY</h3>
-            <p style="font-size:11px;color:#aaa">
-            Floors: ${a.floorsExplored||0} | Kills: ${a.kills||0} | Elites: ${a.eliteKills||0}<br>
-            Gold Earned: ${a.goldEarned||0} | Gold Spent: ${a.goldSpent||0}<br>
-            Potions: ${a.potionsUsed||0} | Items Found: ${a.itemsFound||0}<br>
-            Special Rooms: ${a.specialRoomsVisited||0} | Relics: ${p.relics.length}
-            </p>
-            <button onclick="location.reload()">Play Again</button>`;
-        document.getElementById('end-screen').style.display='flex';
+        stopAmbient();sfxVictory();deleteSave();
+        playEpilogue(game.player, game.analytics||{});
     }
     if(game.player.lives<0){
-        sfxDeath();setTimeout(()=>{
+        stopAmbient();sfxDeath();setTimeout(()=>{
             deleteSave();const p=game.player,a=game.analytics||{};
             document.getElementById('end-box').innerHTML=`
                 <h1 style="color:#f55">GAME OVER</h1>
@@ -3852,6 +4230,72 @@ function checkEndState(){
             document.getElementById('end-screen').style.display='flex';
         },500);
     }
+}
+
+// ========== EPILOGUE ==========
+function playEpilogue(p, a){
+    document.getElementById('game-container').style.display='none';
+    const screen=document.getElementById('epilogue-screen');
+    screen.style.display='flex';
+    const lines=[
+        {text:'...', cls:'epi-dim'},
+        {text:'The crown clatters to the stone floor.', cls:'epi-bright'},
+        {text:'The Forgotten King crumbles. The throne room exhales.', cls:'epi-bright'},
+        {text:'', cls:''},
+        {text:'You stand in the silence that follows.', cls:'epi-bright'},
+        {text:'Forty floors above you, a world waits — unchanged, unaware.', cls:'epi-dim'},
+        {text:'', cls:''},
+        {text:'The torchlight catches something on the walls:', cls:'epi-bright'},
+        {text:'names. Hundreds of them. Scratched into stone.', cls:'epi-dim'},
+        {text:'Adventurers who came before. None of them left.', cls:'epi-dim'},
+        {text:'', cls:''},
+        {text:`But you — the ${p.className} — you are different.`, cls:'epi-highlight'},
+        {text:`${p.kills} things died so you could stand here.`, cls:'epi-dim'},
+        {text:`${p.bossesKilled} of them thought they were gods.`, cls:'epi-dim'},
+        {text:'', cls:''},
+        {text:'The stairs behind you groan and begin to close.', cls:'epi-bright'},
+        {text:'Above: daylight. A way out. The promise of warmth.', cls:'epi-bright'},
+        {text:'', cls:''},
+        {text:'You climb.', cls:'epi-highlight'},
+        {text:'', cls:''},
+        {text:'The dungeon watches you go.', cls:'epi-dim'},
+        {text:'It does not follow.', cls:'epi-dim'},
+        {text:'It does not need to.', cls:'epi-dim'},
+        {text:'', cls:''},
+        {text:'It knows you will remember the dark.', cls:'epi-bright'},
+        {text:'It knows part of you stayed behind.', cls:'epi-bright'},
+        {text:'', cls:''},
+        {text:'You reach the surface. The sun is wrong — too bright, too warm.', cls:'epi-dim'},
+        {text:'Someone asks your name. You almost say the King\'s.', cls:'epi-dim'},
+        {text:'', cls:''},
+        {text:`THE ${p.className.toUpperCase()} ESCAPED THE DEPTHS`, cls:'epi-highlight'},
+        {text:'...or did the Depths escape with them?', cls:'epi-dim'},
+    ];
+    const textEl=document.getElementById('epilogue-text');
+    const statsEl=document.getElementById('epilogue-stats');
+    const btnEl=document.getElementById('epilogue-btn');
+    let html='';
+    lines.forEach((l,i)=>{
+        if(l.text==='')html+=`<div class="epi-line" data-idx="${i}" style="height:12px"></div>`;
+        else html+=`<div class="epi-line ${l.cls}" data-idx="${i}">${l.text}</div>`;
+    });
+    textEl.innerHTML=html;
+    statsEl.innerHTML=`
+        <span style="color:#666">Level ${p.level} ${p.className}</span><br>
+        <span style="color:#555">Floors: ${a.floorsExplored||0} | Kills: ${a.kills||0} | Elites: ${a.eliteKills||0}</span><br>
+        <span style="color:#555">Gold Earned: ${a.goldEarned||0} | Gold Spent: ${a.goldSpent||0}</span><br>
+        <span style="color:#555">Potions: ${a.potionsUsed||0} | Items: ${a.itemsFound||0} | Relics: ${p.relics.length}</span>
+    `;
+    // Animate lines in sequence
+    setTimeout(()=>textEl.classList.add('visible'),500);
+    const allLines=textEl.querySelectorAll('.epi-line');
+    allLines.forEach((el,i)=>{
+        setTimeout(()=>el.classList.add('show'), 1200 + i*800);
+    });
+    // Show stats and button after all lines
+    const totalTime=1200+lines.length*800+1500;
+    setTimeout(()=>statsEl.classList.add('visible'),totalTime);
+    setTimeout(()=>btnEl.classList.add('visible'),totalTime+1500);
 }
 
 // ========== SAVE/LOAD ==========
@@ -3949,6 +4393,7 @@ function loadGame(){
     if(game.currentMutator)addMsg(`${game.currentMutator.icon} Mutator: ${game.currentMutator.name}`,'boss');
     document.getElementById('menu-screen').style.display='none';
     document.getElementById('game-container').style.display='block';
+    updateAmbientForFloor(game.player.floor);
     renderAll();
 }
 function deleteSave(){localStorage.removeItem('dotf_save')}
@@ -3976,6 +4421,7 @@ function selectClass(idx){
     addMsg(`You are the ${cls.name}, descending into the dungeon...`,'xp');
     addMsg("Find the stairs (>) to go deeper!",'dim');
     if(BOSSES[game.player.floor])addMsg(`⚠ ${BOSSES[game.player.floor].name} lurks on this floor...`,'boss');
+    updateAmbientForFloor(game.player.floor);
     renderAll();
 }
 
@@ -3988,6 +4434,8 @@ function startNewGame(){
 function toggleSound(){
     soundEnabled=!soundEnabled;
     document.getElementById('btn-sound').textContent=`Sound: ${soundEnabled?'ON':'OFF'}`;
+    if(soundEnabled&&game)updateAmbientForFloor(game.player.floor);
+    else stopAmbient();
 }
 
 // Keyboard
