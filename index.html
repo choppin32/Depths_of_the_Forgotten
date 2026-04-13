@@ -1986,10 +1986,8 @@ function eventTone(freq,dur,vol,type='triangle'){
 
 // Duck music volume during event sounds, then restore
 function duckMusic(durationMs=1500){
-    // Temporarily lower music volume by reducing gain of scheduled notes
-    // We do this by pausing and restarting after the event
     stopMusic();
-    setTimeout(()=>{if(game&&!game.victory&&soundEnabled)startMusic(game.player.floor)},durationMs);
+    setTimeout(()=>{if(game&&!game.victory&&soundEnabled)startMusic(game.player.floor,currentMusicMode)},durationMs);
 }
 
 function sfxFloorEvent(){
@@ -2251,41 +2249,118 @@ const MUSIC_TIERS=[
      ]},
 ];
 
+// ========== COMBAT MUSIC ==========
+// Faster, more intense — DQ1 battle theme inspired.
+// 4 tiers matching floor depth, each more aggressive.
+const COMBAT_TIERS=[
+    // Tier 0 (Floors 1-10): Urgent D minor — fast staccato
+    {bpm:170, melody:[
+        'A4','R','D5','R', 'C5','Bb4','A4','G4',
+        'F4','R','A4','R', 'G4','F4','E4','D4',
+        'A4','Bb4','A4','G4', 'F4','E4','D4','R',
+        'D4','F4','A4','D5', 'C5','Bb4','A4','R',
+     ],bass:[
+        'D3','D3','D3','D3', 'Bb2','Bb2','A2','A2',
+        'F2','F2','F2','F2', 'G2','G2','A2','A2',
+        'D3','D3','Bb2','Bb2', 'F2','F2','A2','A2',
+        'D3','D3','F2','F2', 'G2','A2','D3','D3',
+     ],arp:[
+        'D4','F4','A4','F4', 'Bb3','D4','F4','D4',
+        'F3','A3','C4','A3', 'G3','Bb3','D4','Bb3',
+        'D4','F4','A4','F4', 'F3','A3','D4','A3',
+        'D4','A4','F4','D4', 'Bb3','G3','A3','D4',
+     ]},
+    // Tier 1 (Floors 11-20): Aggressive C minor
+    {bpm:180, melody:[
+        'C5','R','Eb5','R', 'D5','C5','Bb4','Ab4',
+        'G4','R','C5','R', 'Bb4','Ab4','G4','F4',
+        'Eb4','F4','G4','Ab4', 'Bb4','C5','D5','Eb5',
+        'D5','C5','Bb4','Ab4', 'G4','R','R','R',
+     ],bass:[
+        'C3','C3','C3','C3', 'Ab2','Ab2','Ab2','Ab2',
+        'Eb2','Eb2','Eb2','Eb2', 'Bb2','Bb2','G2','G2',
+        'C3','C3','Ab2','Ab2', 'Eb2','Eb2','G2','G2',
+        'Ab2','Ab2','Bb2','Bb2', 'C3','C3','C3','C3',
+     ],arp:[
+        'C4','Eb4','G4','Eb4', 'Ab3','C4','Eb4','C4',
+        'Eb3','G3','Bb3','G3', 'Bb3','D4','F4','D4',
+        'C4','Eb4','G4','Eb4', 'Ab3','C4','Eb4','C4',
+        'Ab3','Bb3','C4','Eb4', 'G3','C4','Eb4','C4',
+     ]},
+    // Tier 2 (Floors 21-30): Relentless Bb minor
+    {bpm:188, melody:[
+        'F5','Eb5','Db5','Bb4', 'Ab4','R','Bb4','Db5',
+        'Eb5','R','F5','R', 'Gb5','F5','Eb5','Db5',
+        'Bb4','Db5','Eb5','F5', 'Gb5','F5','Eb5','Db5',
+        'Bb4','Ab4','Bb4','R', 'Db5','Eb5','F5','R',
+     ],bass:[
+        'Bb2','Bb2','Bb2','Bb2', 'Ab2','Ab2','Gb2','Gb2',
+        'Eb2','Eb2','Eb2','Eb2', 'Gb2','Gb2','Ab2','Ab2',
+        'Bb2','Bb2','Gb2','Gb2', 'Eb2','Eb2','F2','F2',
+        'Gb2','Gb2','Ab2','Ab2', 'Bb2','Bb2','Bb2','Bb2',
+     ],arp:[
+        'Bb3','Db4','F4','Db4', 'Ab3','Db4','Eb4','Db4',
+        'Eb3','Gb3','Bb3','Gb3', 'Gb3','Bb3','Db4','Bb3',
+        'Bb3','Db4','F4','Db4', 'Eb3','Gb3','Bb3','Gb3',
+        'Gb3','Ab3','Bb3','Db4', 'Ab3','Bb3','Db4','Bb3',
+     ]},
+    // Tier 3 (Floors 31-40): Hellish Ab minor — chaotic and fast
+    {bpm:196, melody:[
+        'Ab4','B4','D5','E5', 'D5','B4','Ab4','G4',
+        'E4','R','Ab4','R', 'B4','D5','E5','D5',
+        'Ab4','G4','E4','D4', 'E4','G4','Ab4','B4',
+        'D5','E5','D5','B4', 'Ab4','E4','R','R',
+     ],bass:[
+        'Ab2','Ab2','Ab2','Ab2', 'E2','E2','E2','E2',
+        'Ab2','Ab2','D2','D2', 'B2','B2','E2','E2',
+        'Ab2','Ab2','E2','E2', 'D2','D2','E2','E2',
+        'Ab2','Ab2','E2','E2', 'Ab2','Ab2','Ab2','Ab2',
+     ],arp:[
+        'Ab3','B3','D4','B3', 'E3','Ab3','B3','Ab3',
+        'Ab3','D4','E4','D4', 'B3','E4','Ab4','E4',
+        'Ab3','B3','D4','B3', 'D3','E3','Ab3','E3',
+        'Ab3','B3','D4','E4', 'D4','B3','Ab3','E3',
+     ]},
+];
+
 // Note name remapping for flats/sharps not in the table
 function noteFreq(n){
     if(NOTE_FREQ[n]!==undefined)return NOTE_FREQ[n];
     // Handle Db, Gb etc by enharmonic equivalents
     const map={'Db2':69.30,'Db3':138.59,'Db4':277.18,'Db5':554.37,
                'Gb2':92.50,'Gb3':185.00,'Gb4':369.99,'Gb5':739.99,
+               'Gb5':739.99,
                'B3':246.94,'B4':493.88,'B5':987.77};
     return map[n]||0;
 }
 
-function startMusic(floor){
+let currentMusicMode='explore'; // 'explore' or 'combat'
+
+function startMusic(floor,mode='explore'){
     stopMusic();
     if(!soundEnabled)return;
     musicPlaying=true;
+    currentMusicMode=mode;
     const tier=Math.min(3,Math.floor((floor-1)/10));
-    const t=MUSIC_TIERS[tier];
-    const eighthNote=60/t.bpm/2; // duration of one eighth note
+    const tiers=mode==='combat'?COMBAT_TIERS:MUSIC_TIERS;
+    const t=tiers[tier];
+    const eighthNote=60/t.bpm/2;
     const loopLen=t.melody.length*eighthNote;
-    const melVol=0.022;
-    const bassVol=0.018;
-    const arpVol=0.011;
+    // Combat music slightly louder than explore
+    const volMult=mode==='combat'?1.3:1.0;
+    const melVol=0.022*volMult;
+    const bassVol=0.018*volMult;
+    const arpVol=0.011*volMult;
 
     function scheduleLoop(){
         if(!musicPlaying)return;
         const now=audioCtx.currentTime+0.05;
         for(let i=0;i<t.melody.length;i++){
             const time=now+i*eighthNote;
-            // Melody voice: square wave
             chipNote(noteFreq(t.melody[i]),eighthNote*0.9,'square',melVol,time);
-            // Bass voice: triangle wave
             chipNote(noteFreq(t.bass[i]),eighthNote*0.9,'triangle',bassVol,time);
-            // Arpeggio voice: quieter square
             chipNote(noteFreq(t.arp[i]),eighthNote*0.45,'square',arpVol,time);
         }
-        // Schedule next loop
         musicTimer=setTimeout(scheduleLoop,(loopLen-0.1)*1000);
     }
     scheduleLoop();
@@ -2296,9 +2371,19 @@ function stopMusic(){
     if(musicTimer){clearTimeout(musicTimer);musicTimer=null}
 }
 
+function startCombatMusic(){
+    if(!game)return;
+    startMusic(game.player.floor,'combat');
+}
+
+function startExploreMusic(){
+    if(!game)return;
+    startMusic(game.player.floor,'explore');
+}
+
 function updateAmbientForFloor(floor){
     if(!soundEnabled){stopMusic();return}
-    startMusic(floor);
+    startMusic(floor,'explore');
 }
 
 // Keep old function names as aliases for existing call sites
@@ -3188,11 +3273,11 @@ let combatEnemy=null,combatRoom=null,combatLog=[];
 
 function startCombat(enemy,room){
     inCombat=true;combatEnemy=enemy;combatRoom=room;combatLog=[];
-    resetTension();
+    resetTension();stopMusic();
     flashCombatStart();
-    if(enemy.isBoss){sfxBossFanfare();showEventBanner(`⚔ ${enemy.name.toUpperCase()}`,'danger')}
-    else if(enemy.isElite){sfxCombatStart();showEventBanner('★ ELITE ENCOUNTER','danger')}
-    else{sfxCombatStart();showEventBanner('☠ AMBUSH!','danger')}
+    if(enemy.isBoss){sfxBossFanfare();showEventBanner(`⚔ ${enemy.name.toUpperCase()}`,'danger');setTimeout(startCombatMusic,1800)}
+    else if(enemy.isElite){sfxCombatStart();showEventBanner('★ ELITE ENCOUNTER','danger');setTimeout(startCombatMusic,600)}
+    else{sfxCombatStart();showEventBanner('☠ AMBUSH!','danger');setTimeout(startCombatMusic,400)}
     game.player.backstabReady=true;
     game.player.backstabUsedLastRound=false;
     game.player.defendCount=0;
@@ -3785,6 +3870,7 @@ function handleEnemyDefeat(enemy){
 function endCombat(resolved){
     document.getElementById('combat-screen').style.display='none';
     inCombat=false;
+    startExploreMusic();
     tickTrinketCooldowns();
     const victoryRoom=combatRoom;
     const victorious=resolved&&combatEnemy&&combatEnemy.hp<=0;
