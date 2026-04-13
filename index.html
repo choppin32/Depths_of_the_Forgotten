@@ -1919,13 +1919,14 @@ function rollFloorEvent(){
 }
 
 function triggerFloorEvent(room){
+    inEvent=true; // block movement during event
     const ev=rollFloorEvent();
     room._floorEvent=ev;room._floorEventHandled=true;
     sfxFloorEvent();
     showEventBanner('⚠ SOMETHING STIRS...','mystery');
     resetTension();
     setTimeout(()=>{
-        let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+        let html=`<button class="overlay-close" onclick="inEvent=false;document.getElementById('item-screen').style.display='none'">X</button>`;
         html+=`<h2 style="color:#f93">${ev.title.toUpperCase()}</h2><p style="color:#bbb;margin-bottom:12px">${ev.desc}</p>`;
         ev.choices.forEach((c,i)=>{
             html+=`<div><button onclick="handleFloorEvent(${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
@@ -1936,6 +1937,7 @@ function triggerFloorEvent(room){
 }
 
 function handleFloorEvent(choiceIdx){
+    inEvent=false; // unlock movement
     document.getElementById('item-screen').style.display='none';
     const room=game.getCurrentRoom();
     if(!room||!room._floorEvent)return;
@@ -2951,6 +2953,7 @@ function stopAmbient(){stopMusic()}
 let game = null;
 let messages = [];
 let inCombat = false;
+let inEvent = false; // blocks movement during floor events / special rooms
 
 function randInt(a,b){return Math.floor(Math.random()*(b-a+1))+a}
 function pick(arr){return arr[randInt(0,arr.length-1)]}
@@ -3737,7 +3740,7 @@ const AUTO_USE = new Set(['gold','key']); // Only gold & keys auto-apply; everyt
 
 // ========== MOVEMENT ==========
 function movePlayer(dx,dy){
-    if(inCombat||!game)return;
+    if(inCombat||inEvent||!game)return;
     const p=game.player,nx=p.x+dx,ny=p.y+dy;
     if(nx<0||nx>=MAP_W||ny<0||ny>=MAP_H)return;
     if(game.grid[ny][nx]==='#')return;
@@ -4977,6 +4980,7 @@ const SHRINE_NAMES = [
 
 function triggerSpecialRoom(room){
     if(!room.specialType||room.specialHandled)return;
+    inEvent=true; // block movement during special room
     room.specialHandled=true;
     sfxSpecialRoom();
     showEventBanner('🕯 A PRESENCE...','holy');
@@ -5000,7 +5004,7 @@ function triggerSpecialRoom(room){
         const scenario=getCampfireScenario();
         room._campfireScenario=scenario;
         displayDesc=scenario.desc;
-        let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+        let html=`<button class="overlay-close" onclick="inEvent=false;document.getElementById('item-screen').style.display='none'">X</button>`;
         html+=`<h2 style="color:#f93">CAMPFIRE</h2><p style="color:#bbb;margin-bottom:12px">${displayDesc}</p>`;
         scenario.choices.forEach((c,i)=>{
             html+=`<div><button onclick="handleSpecialChoice('campfire',${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
@@ -5009,7 +5013,7 @@ function triggerSpecialRoom(room){
         document.getElementById('item-screen').style.display='flex';
         return;
     }
-    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    let html=`<button class="overlay-close" onclick="inEvent=false;document.getElementById('item-screen').style.display='none'">X</button>`;
     html+=`<h2 style="color:#f93">${displayName.toUpperCase()}</h2><p style="color:#bbb;margin-bottom:12px">${displayDesc}</p>`;
     srt.choices.forEach((c,i)=>{
         html+=`<div><button onclick="handleSpecialChoice('${srt.id}',${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c}</button></div>`;
@@ -5019,6 +5023,7 @@ function triggerSpecialRoom(room){
 }
 
 function handleSpecialChoice(roomId,choiceIdx){
+    inEvent=false; // unlock movement
     const p=game.player;
     document.getElementById('item-screen').style.display='none';
     if(roomId==='shrine'){
