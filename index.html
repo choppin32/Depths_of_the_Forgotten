@@ -294,6 +294,14 @@ body {
 }
 #bar-hp-fill { height: 100%; background: #5f5; transition: width 0.2s; }
 #bar-xp-fill { height: 100%; background: #5ff; transition: width 0.2s; }
+#bar-noise { display: inline-block; width: 60%; height: 8px; background: #222; border-radius: 2px; overflow: hidden; vertical-align: middle; }
+#bar-noise-fill { height: 100%; background: #888; transition: width 0.3s, background 0.3s; }
+#bar-noise-fill.noise-low { background: #4a9; }
+#bar-noise-fill.noise-mid { background: #f93; }
+#bar-noise-fill.noise-high { background: #f44; }
+#bar-noise-fill.noise-extreme { background: #f22; animation: noise-pulse 0.5s infinite alternate; }
+@keyframes noise-pulse { from{opacity:0.7} to{opacity:1} }
+.stealth-color { color: #7bf; }
 
 #messages {
     padding: 8px;
@@ -942,6 +950,7 @@ body {
             <div><span class="hud-label">Kills:</span> <span id="hud-kills"></span> &nbsp; <span class="boss-color">Bosses:</span> <span id="hud-bosses"></span></div>
             <div><span class="hud-label">Floor:</span> <span id="hud-floor"></span></div>
             <div><span class="hud-label">Relics:</span> <span id="hud-relics"></span></div>
+            <div><span class="hud-label">Noise:</span> <div id="bar-noise"><div id="bar-noise-fill"></div></div> <span id="hud-noise"></span> &nbsp;<span class="stealth-color">STL:</span> <span id="hud-stealth" class="stealth-color"></span></div>
         </div>
     </div>
     <div id="messages"></div>
@@ -952,7 +961,7 @@ body {
             <div class="lh-row"><span class="atk-color">ATK:</span><span id="lh-atk"></span> <span class="def-color">DEF:</span><span id="lh-def"></span></div>
             <div class="lh-row"><span id="lh-lives"></span></div>
             <div class="lh-row"><span class="gold-color">Gold:</span><span id="lh-gold"></span> Keys:<span id="lh-keys"></span></div>
-            <div class="lh-row">Floor: <span id="lh-floor"></span></div>
+            <div class="lh-row">Floor: <span id="lh-floor"></span> | <span class="hud-label">Noise:</span><span id="lh-noise"></span> <span class="stealth-color">STL:</span><span id="lh-stealth" class="stealth-color"></span></div>
         </div>
         <div id="dpad">
             <button class="up" data-move="0,-1">↑</button>
@@ -1296,12 +1305,12 @@ const TRINKETS = [
 ];
 
 const CHARACTER_CLASSES = [
-    {name:"Knight",hp:40,attack:5,defense:3,ability:"block",abilityName:"Shield Block",abilityDesc:"Halves incoming damage for 2 turns",abilityUses:-1,startingItem:{name:"Steel Shield",type:"armor",value:1,desc:"+1 DEF",slot:"offhand"},detectHidden:0.1,disarmTrap:0.2,desc:"Tanky defender. Beginner-friendly."},
-    {name:"Rogue",hp:25,attack:7,defense:1,ability:"backstab",abilityName:"Backstab",abilityDesc:"2x damage on first attack in combat",abilityUses:-1,startingItem:{name:"Lockpick Set",type:"key",value:1,desc:"Opens locked chests"},detectHidden:0.25,disarmTrap:0.6,desc:"High risk, high reward. Finds secrets."},
-    {name:"Mage",hp:20,attack:4,defense:1,ability:"fireball",abilityName:"Fireball",abilityDesc:"Deals 15+ damage (3 uses/floor)",abilityUses:3,startingItem:{name:"Scroll of Fire",type:"scroll",value:20,desc:"Deals 20 damage"},detectHidden:0.15,disarmTrap:0.1,desc:"Glass cannon. Devastating magic."},
-    {name:"Ranger",hp:28,attack:6,defense:2,ability:"scout",abilityName:"Scout",abilityDesc:"Reveals hidden items & trap types",abilityUses:-1,startingItem:{name:"Hunter's Bow",type:"weapon",value:1,desc:"+1 ATK",slot:"weapon"},detectHidden:0.5,disarmTrap:0.35,desc:"Balanced. Best at finding secrets."},
-    {name:"Cleric",hp:30,attack:4,defense:2,ability:"heal",abilityName:"Divine Heal",abilityDesc:"Restore 15+ HP (3 uses/floor)",abilityUses:3,startingItem:{name:"Holy Symbol",type:"buff_defense",value:1,desc:"+1 DEF"},detectHidden:0.15,disarmTrap:0.2,desc:"Sustain healer for long runs."},
-    {name:"Berserker",hp:35,attack:8,defense:0,ability:"rage",abilityName:"Rage",abilityDesc:"+5 ATK for 3 turns, +50% dmg taken",abilityUses:-1,startingItem:{name:"War Paint",type:"buff_attack",value:1,desc:"+1 ATK"},detectHidden:0.05,disarmTrap:0.1,desc:"All offense, no defense."},
+    {name:"Knight",hp:40,attack:5,defense:3,stealth:2,ability:"block",abilityName:"Shield Block",abilityDesc:"Halves incoming damage for 2 turns",abilityUses:-1,startingItem:{name:"Steel Shield",type:"armor",value:1,desc:"+1 DEF",slot:"offhand"},detectHidden:0.1,disarmTrap:0.2,desc:"Tanky defender. Beginner-friendly."},
+    {name:"Rogue",hp:25,attack:7,defense:1,stealth:8,ability:"backstab",abilityName:"Backstab",abilityDesc:"2x damage on first attack in combat",abilityUses:-1,startingItem:{name:"Lockpick Set",type:"key",value:1,desc:"Opens locked chests"},detectHidden:0.25,disarmTrap:0.6,desc:"High risk, high reward. Finds secrets."},
+    {name:"Mage",hp:20,attack:4,defense:1,stealth:4,ability:"fireball",abilityName:"Fireball",abilityDesc:"Deals 15+ damage (3 uses/floor)",abilityUses:3,startingItem:{name:"Scroll of Fire",type:"scroll",value:20,desc:"Deals 20 damage"},detectHidden:0.15,disarmTrap:0.1,desc:"Glass cannon. Devastating magic."},
+    {name:"Ranger",hp:28,attack:6,defense:2,stealth:6,ability:"scout",abilityName:"Scout",abilityDesc:"Reveals hidden items & trap types",abilityUses:-1,startingItem:{name:"Hunter's Bow",type:"weapon",value:1,desc:"+1 ATK",slot:"weapon"},detectHidden:0.5,disarmTrap:0.35,desc:"Balanced. Best at finding secrets."},
+    {name:"Cleric",hp:30,attack:4,defense:2,stealth:3,ability:"heal",abilityName:"Divine Heal",abilityDesc:"Restore 15+ HP (3 uses/floor)",abilityUses:3,startingItem:{name:"Holy Symbol",type:"buff_defense",value:1,desc:"+1 DEF"},detectHidden:0.15,disarmTrap:0.2,desc:"Sustain healer for long runs."},
+    {name:"Berserker",hp:35,attack:8,defense:0,stealth:0,ability:"rage",abilityName:"Rage",abilityDesc:"+5 ATK for 3 turns, +50% dmg taken",abilityUses:-1,startingItem:{name:"War Paint",type:"buff_attack",value:1,desc:"+1 ATK"},detectHidden:0.05,disarmTrap:0.1,desc:"All offense, no defense."},
 ];
 
 const ENEMY_TYPES = [
@@ -1695,7 +1704,7 @@ const EVENT_CHOICES = [
     {text:'Check for coins',action:(p)=>{const g=randInt(15,35);p.gold+=g;addMsg(`Coins. Still warm from someone's pocket. +${g} gold`,'gold')}},
     {text:'Loot what you can',action:(p)=>{const g=randInt(20,50);p.gold+=g;addMsg(`You take what's here. No one will miss it. +${g} gold`,'gold')}},
     {text:'Offer a prayer... then take the gold',action:(p)=>{const g=randInt(12,45);p.gold+=g;addMsg(`Piety and profit. The dungeon approves. +${g} gold`,'gold')}},
-    {text:'Shake it down',action:(p)=>{if(Math.random()<0.7){const g=randInt(25,60);p.gold+=g;addMsg(`+${g} gold rattles free.`,'gold')}else{const d=randInt(3,8);p.hp-=d;addMsg(`Something snaps back. -${d} HP`,'enemy');flashDamage()}}},
+    {text:'Shake it down',noise:10,action:(p)=>{if(Math.random()<0.7){const g=randInt(25,60);p.gold+=g;addMsg(`+${g} gold rattles free.`,'gold')}else{const d=randInt(3,8);p.hp-=d;addMsg(`Something snaps back. -${d} HP`,'enemy');flashDamage()}}},
     {text:'Dig through the rubble',action:(p)=>{const g=randInt(8,30);p.gold+=g;addMsg(`Buried treasure. Or buried junk. +${g} gold`,'gold')}},
     // === ITEMS ===
     {text:'Take what it offers',action:(p)=>{const item=cloneItem(pick(ITEM_TYPES));p.inventory.push(item);addMsg(`You receive: ${item.name}`,'item');showLootToast(item,'event',false)}},
@@ -1723,9 +1732,9 @@ const EVENT_CHOICES = [
     {text:'Sharpen your blade on it',action:(p)=>{p.bonusAttack+=1;p.recalcStats();addMsg("The edge catches something unnatural. ATK +1",'hp')}},
     {text:'Feed it your anger',action:(p)=>{p.bonusAttack+=2;p.recalcStats();addMsg("The rage crystallizes. ATK +2",'hp');addMsg("The dungeon leans closer.",'dim')}},
     {text:'Let the hate in',action:(p)=>{p.bonusAttack+=2;p.recalcStats();addMsg("Something cold and sharp settles in your chest. ATK +2",'hp')}},
-    {text:'Break it with your bare hands',action:(p)=>{const d=randInt(3,6);p.hp-=d;p.bonusAttack+=2;p.recalcStats();addMsg(`Your knuckles bleed. Worth it. -${d} HP, ATK +2`,'hp');flashDamage()}},
+    {text:'Break it with your bare hands',noise:14,action:(p)=>{const d=randInt(3,6);p.hp-=d;p.bonusAttack+=2;p.recalcStats();addMsg(`Your knuckles bleed. Worth it. -${d} HP, ATK +2`,'hp');flashDamage()}},
     {text:'Claim its power',action:(p)=>{if(Math.random()<0.6){p.bonusAttack+=3;p.recalcStats();addMsg("Power surges through you. ATK +3",'hp')}else{p.bonusAttack+=1;p.maxHp=Math.max(10,p.maxHp-3);p.hp=Math.min(p.maxHp,p.hp);p.recalcStats();addMsg("Power at a cost. ATK +1, -3 Max HP",'enemy')}}},
-    {text:'Scream into the void',action:(p)=>{p.bonusAttack+=1;p.recalcStats();addMsg("The void screams back. You feel stronger. ATK +1",'hp')}},
+    {text:'Scream into the void',noise:18,action:(p)=>{p.bonusAttack+=1;p.recalcStats();addMsg("The void screams back. You feel stronger. ATK +1",'hp')}},
     {text:'Dip your weapon in it',action:(p)=>{p.bonusAttack+=2;p.recalcStats();addMsg("The blade hums with something that isn't magic. ATK +2",'hp')}},
     // === DEF BUFFS ===
     {text:'Wrap yourself in the remains',action:(p)=>{p.bonusDefense+=1;p.recalcStats();addMsg("It clings to you like a second skin. DEF +1",'hp')}},
@@ -1742,19 +1751,19 @@ const EVENT_CHOICES = [
     {text:'Taste it',action:(p)=>{if(Math.random()<0.5){const h=Math.floor(p.maxHp*0.4);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`Sweet. Healing. Wrong. +${h} HP`,'hp')}else{applyStatus(p,'poison',3,3);addMsg("Bitter. Burning. Poison.",'enemy')}}},
     {text:'Make a deal',action:(p)=>{p.bonusAttack+=1;p.bonusDefense+=1;p.recalcStats();p.maxHp=Math.max(10,p.maxHp-5);p.hp=Math.min(p.maxHp,p.hp);addMsg("The deal is struck. ATK +1, DEF +1, but -5 Max HP. Fair?",'hp')}},
     {text:'Sacrifice something precious',action:(p)=>{if(p.gold>=30){p.gold-=30;awardRelic('event');addMsg("The sacrifice is accepted. Something ancient stirs.",'boss')}else if(p.inventory.length>0){p.inventory.pop();p.bonusAttack+=2;p.bonusDefense+=2;p.recalcStats();addMsg("An item vanishes from your bag. In return: strength. ATK +2, DEF +2",'hp')}else addMsg("You have nothing left to give.",'dim')}},
-    // === WALK AWAY / CAUTIOUS ===
-    {text:'Back away slowly',action:(p)=>{addMsg("You retreat. Some doors are better left closed.",'dim')}},
-    {text:'Ignore it',action:(p)=>{addMsg("You move on. The memory of it doesn't.",'dim')}},
-    {text:'Walk away',action:(p)=>{addMsg("You leave it behind. It stays behind. Probably.",'dim')}},
-    {text:'Pretend you didn\'t see it',action:(p)=>{addMsg("You avert your eyes. When you look back, it hasn't moved. Yet.",'dim')}},
-    {text:'Nod and move on',action:(p)=>{addMsg("Acknowledgment. Nothing more. The dungeon notes your restraint.",'dim');if(Math.random()<0.3){p.bonusDefense+=1;p.recalcStats();addMsg("Caution has its own rewards. DEF +1",'hp')}}},
-    {text:'Leave it for the next one',action:(p)=>{addMsg("Let someone else deal with it. If there is a someone else.",'dim')}},
-    {text:'Mark it and move on',action:(p)=>{const xp=5+p.floor;p.gainXp(xp);addMsg(`You make a mental note. It might matter later. +${xp} XP`,'xp')}},
+    // === WALK AWAY / CAUTIOUS === (noise:0 — silent choices)
+    {text:'Back away slowly',noise:0,action:(p)=>{addMsg("You retreat. Some doors are better left closed.",'dim')}},
+    {text:'Ignore it',noise:0,action:(p)=>{addMsg("You move on. The memory of it doesn't.",'dim')}},
+    {text:'Walk away',noise:0,action:(p)=>{addMsg("You leave it behind. It stays behind. Probably.",'dim')}},
+    {text:'Pretend you didn\'t see it',noise:0,action:(p)=>{addMsg("You avert your eyes. When you look back, it hasn't moved. Yet.",'dim')}},
+    {text:'Nod and move on',noise:0,action:(p)=>{addMsg("Acknowledgment. Nothing more. The dungeon notes your restraint.",'dim');if(Math.random()<0.3){p.bonusDefense+=1;p.recalcStats();addMsg("Caution has its own rewards. DEF +1",'hp')}}},
+    {text:'Leave it for the next one',noise:0,action:(p)=>{addMsg("Let someone else deal with it. If there is a someone else.",'dim')}},
+    {text:'Mark it and move on',noise:0,action:(p)=>{const xp=5+p.floor;p.gainXp(xp);addMsg(`You make a mental note. It might matter later. +${xp} XP`,'xp')}},
     // === CREEPY / DARK ===
     {text:'Whisper back',action:(p)=>{if(Math.random()<0.5){const xp=15+p.floor*3;p.gainXp(xp);addMsg(`It answers. You wish it hadn't. +${xp} XP`,'xp')}else{applyStatus(p,'curse',0,3);addMsg("It heard you. It knows your voice now.",'enemy')}}},
     {text:'Laugh at it',action:(p)=>{p.bonusAttack+=1;p.recalcStats();addMsg("Madness or courage — the dungeon can't tell the difference. ATK +1",'hp')}},
     {text:'Add your own blood',action:(p)=>{const d=randInt(3,8);p.hp-=d;p.bonusAttack+=1;p.bonusDefense+=1;p.bonusMaxHp+=3;p.recalcStats();addMsg(`Your blood sizzles. The walls remember you now. -${d} HP, ATK +1, DEF +1, Max HP +3`,'hp');flashDamage()}},
-    {text:'Destroy it completely',action:(p)=>{p.bonusAttack+=2;p.recalcStats();addMsg("Violence is a language the dungeon understands. ATK +2",'hp')}},
+    {text:'Destroy it completely',noise:15,action:(p)=>{p.bonusAttack+=2;p.recalcStats();addMsg("Violence is a language the dungeon understands. ATK +2",'hp')}},
     {text:'Bow to it',action:(p)=>{if(Math.random()<0.6){p.bonusDefense+=2;p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);addMsg("Respect is returned. DEF +2, Max HP +5",'hp')}else{addMsg("It bows back. This is worse somehow.",'dim')}}},
     {text:'Eat it',action:(p)=>{if(Math.random()<0.4){p.bonusAttack+=2;p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);addMsg("It tastes like victory. ATK +2, Max HP +5",'hp')}else{const d=randInt(8,15);p.hp-=d;addMsg(`Your stomach rebels. -${d} HP`,'enemy');flashDamage();screenShake()}}},
     {text:'Set it on fire',action:(p)=>{p.bonusAttack+=1;p.recalcStats();addMsg("It burns. Everything burns eventually. ATK +1",'hp');if(Math.random()<0.3){const g=randInt(10,25);p.gold+=g;addMsg(`Something melts free from the remains. +${g} gold`,'gold')}}},
@@ -1932,7 +1941,26 @@ function handleFloorEvent(choiceIdx){
     if(!room||!room._floorEvent)return;
     const ev=room._floorEvent;
     const p=game.player;
-    if(ev.choices[choiceIdx]&&ev.choices[choiceIdx].action)ev.choices[choiceIdx].action(p);
+    const choice=ev.choices[choiceIdx];
+    if(choice&&choice.action)choice.action(p);
+    // Noise from event choice: tagged choices use their value, otherwise auto-detect
+    let choiceNoise;
+    if(choice&&choice.noise!==undefined){choiceNoise=choice.noise}
+    else{
+        const t=(choice&&choice.text||'').toLowerCase();
+        // Loud actions
+        const loud=/destroy|scream|smash|crush|kick|break|challenge|wrestle|shove|jump|set.+fire|dare|tear.+apart|rip|slam|bash|roar/;
+        // Quiet actions
+        const quiet=/back away|ignore|walk away|pretend|leave it|move on|close your eyes|hold your breath|sleep|whisper|listen|study|meditate|pray|refuse|seal|turn around|shake your head/;
+        // Silent/stealth actions
+        const silent=/sneak|slip|stealth|creep|shadow|silent|quiet/;
+        if(silent.test(t))choiceNoise=-3; // actually reduces noise
+        else if(quiet.test(t))choiceNoise=0;
+        else if(loud.test(t))choiceNoise=14;
+        else choiceNoise=5; // default moderate noise
+    }
+    if(choiceNoise<0){game.player.noise=Math.max(0,game.player.noise+choiceNoise);addMsg("You fade into the silence.",'hidden')}
+    else if(choiceNoise>0)addNoise(choiceNoise,'event');
     if(p.isDead())handleDeath();
     renderAll();checkEndState();
 }
@@ -2131,6 +2159,9 @@ const RELICS = [
     {id:'crystal_eye',name:'Crystal Eye',desc:'See enemy intents more clearly',rarity:0,affinity:null},
     {id:'bone_ward',name:'Bone Ward',desc:'Start each combat with Barrier 8',rarity:2,affinity:null},
     {id:'crown_thorns',name:'Crown of Thorns',desc:'+4 ATK, take 1 extra damage per hit',rarity:2,affinity:null},
+    {id:'shadow_cloak',name:'Shadow Cloak',desc:'+3 Stealth, noise decays 50% faster',rarity:1,affinity:'Rogue'},
+    {id:'dead_mans_boots',name:"Dead Man's Boots",desc:'Movement generates no noise',rarity:2,affinity:null},
+    {id:'hunters_charm',name:"Hunter's Charm",desc:'+2 Stealth, surprise attack chance doubled',rarity:1,affinity:'Ranger'},
 ];
 
 // ========== V1.1 ITEM SETS ==========
@@ -2521,6 +2552,137 @@ function tickTension(){
 }
 
 function resetTension(){roomsSinceEncounter=0}
+
+// ========== NOISE & STEALTH SYSTEM ==========
+const NOISE_MSGS_HIGH=[
+    "Your footsteps echo too loudly...","Something heard that.","The dungeon is listening.",
+    "You're making too much noise.","Shadows stir at the sound.","The walls carry your noise deeper.",
+    "A distant growl answers the commotion.","You feel eyes drawn to your noise.",
+];
+const NOISE_MSGS_LOW=[
+    "You move like a shadow.","Silence is your ally.","The darkness doesn't notice you.",
+    "Your footsteps are whispers.","You slip through undetected.","The dungeon forgets you're here.",
+];
+const NOISE_MSGS_AMBUSH=[
+    "⚠ They heard you coming!","⚠ Your noise drew them right to you!",
+    "⚠ An ambush! You were too loud!","⚠ They were waiting — they knew you were coming!",
+];
+const NOISE_MSGS_AVOID=[
+    "You slip past unnoticed...","Your stealth lets you avoid a confrontation.",
+    "Something stirs, but you're already gone.","A shadow passes — it didn't see you.",
+    "You hear breathing nearby. It doesn't hear yours.",
+];
+const NOISE_MSGS_SURPRISE=[
+    "You catch it off guard!","Your silent approach gives you the first strike!",
+    "It never heard you coming.","A perfect ambush — YOU are the predator.",
+];
+
+// Add noise, reduced by stealth. Clamp 0-100.
+function addNoise(amount, source=''){
+    if(!game||!game.player)return;
+    const p=game.player;
+    const reduction=Math.floor(amount*(p.stealth*0.04)); // 4% reduction per stealth point
+    const actual=Math.max(1,amount-reduction);
+    p.noise=Math.min(100,p.noise+actual);
+    // Feedback at thresholds
+    if(p.noise>=70&&p.noise-actual<70){addMsg(pick(NOISE_MSGS_HIGH),'enemy');sfxNoiseThreat()}
+    else if(p.noise>=90&&p.noise-actual<90){addMsg("⚠ DANGER: You are extremely loud. Enemies are hunting you.",'enemy');screenShake();sfxNoiseThreat()}
+    renderAll();
+}
+
+// Decay noise each room moved
+function decayNoise(){
+    if(!game||!game.player)return;
+    const p=game.player;
+    let decay=2+Math.floor(p.stealth*0.3); // base 2 + stealth bonus
+    if(hasRelic('shadow_cloak'))decay=Math.floor(decay*1.5); // 50% faster decay
+    p.noise=Math.max(0,p.noise-decay);
+}
+
+// Check if player avoids an encounter (low noise)
+function noiseAvoidCheck(){
+    if(!game)return false;
+    const p=game.player;
+    if(p.noise<20){
+        const avoidChance=0.15+(20-p.noise)*0.015+p.stealth*0.01; // up to ~45% at 0 noise + high stealth
+        if(Math.random()<avoidChance){
+            addMsg(pick(NOISE_MSGS_AVOID),'hidden');
+            sfxStealth();
+            return true; // avoided
+        }
+    }
+    return false;
+}
+
+// Check if player gets surprise round (low noise, free hit)
+function noiseSurpriseCheck(enemy){
+    if(!game||enemy.isBoss)return false; // bosses immune
+    const p=game.player;
+    if(p.noise<30){
+        let surpriseChance=0.10+(30-p.noise)*0.01+p.stealth*0.008;
+        if(hasRelic('hunters_charm'))surpriseChance*=2; // doubled
+        if(Math.random()<surpriseChance)return true;
+    }
+    return false;
+}
+
+// Check if enemies ambush player (high noise, enemy attacks first)
+function noiseAmbushCheck(enemy){
+    if(!game)return false;
+    if(enemy.isBoss)return false; // bosses always have their own intro
+    const p=game.player;
+    if(p.noise>70){
+        const ambushChance=(p.noise-70)*0.02; // 0-60% at noise 70-100
+        if(Math.random()<ambushChance)return true;
+    }
+    return false;
+}
+
+// Check for extra enemy spawn from extreme noise
+function noiseExtraSpawnCheck(room){
+    if(!game||!game.player)return;
+    const p=game.player;
+    if(p.noise>90&&room.enemies&&!room.isBossRoom){
+        const spawnChance=(p.noise-90)*0.04; // up to 40% at noise 100
+        if(Math.random()<spawnChance){
+            // Spawn an extra elite-tier enemy
+            const mi=Math.min(ENEMY_TYPES.length-1,2+Math.floor(p.floor/2));
+            const t=pick(ENEMY_TYPES.slice(0,mi+1));
+            const sc=1+p.floor*0.18;
+            let hp=Math.floor(t.hp*sc*1.25),atk=Math.floor(t.attack*sc*1.15),xp=Math.floor(t.xp*sc*1.3);
+            const enemy={name:t.name,baseName:t.name,hp,maxHp:hp,attack:atk,xp,char:t.char.toUpperCase(),desc:t.desc,isBoss:false,isElite:true,role:ENEMY_ROLES[t.name]||'default',traits:[],statusEffects:[]};
+            // Give it a trait
+            if(ENEMY_TRAITS.length)enemy.traits.push(pick(ENEMY_TRAITS));
+            enemy.x=p.x;enemy.y=p.y; // spawn on player
+            room.enemies.push(enemy);
+            addMsg("⚠ Your noise attracted something powerful!",'enemy');
+            showEventBanner('★ DRAWN BY NOISE','danger');
+            sfxNoiseThreat();
+            return enemy; // return for immediate combat
+        }
+    }
+    return null;
+}
+
+// SFX for noise events
+function sfxNoiseThreat(){
+    if(!soundEnabled)return;
+    duckMusic(800);
+    eventTone(120,400,0.14,'sawtooth');
+    setTimeout(()=>eventTone(90,500,0.12,'sawtooth'),250);
+}
+function sfxStealth(){
+    if(!soundEnabled)return;
+    eventTone(800,200,0.08,'sine');
+    setTimeout(()=>eventTone(1000,150,0.06,'sine'),150);
+}
+function sfxSurpriseAttack(){
+    if(!soundEnabled)return;
+    duckMusic(600);
+    eventTone(500,150,0.14,'square');
+    setTimeout(()=>eventTone(700,150,0.14,'square'),100);
+    setTimeout(()=>eventTone(900,200,0.16,'square'),200);
+}
 
 // ========== DUNGEON MUSIC (chiptune, DQ1-inspired) ==========
 // Looping melodic chiptune that gets darker with depth.
@@ -2956,6 +3118,11 @@ class Player {
         this.detectHidden=cls.detectHidden;this.disarmTrap=cls.disarmTrap;
         this.blockTurns=0;this.rageTurns=0;this.backstabReady=true;
         this.bonusAttack=0;this.bonusDefense=0;this.bonusMaxHp=0;
+        // Noise & Stealth system
+        this.noise=0; // 0-100 meter
+        this.baseStealth=cls.stealth||0; // class base stealth
+        this.bonusStealth=0; // from items/relics/events
+        this.stealth=this.baseStealth; // effective stealth (recalced)
         // V1.1 additions
         this.statusEffects=[];
         this.relics=[];
@@ -3018,6 +3185,23 @@ class Player {
         this.maxHp=this.cls.hp+(this.level-1)*3+this.bonusMaxHp+eqHp;
         if(this.maxHp>oldMax)this.hp+=this.maxHp-oldMax;
         if(this.hp>this.maxHp)this.hp=this.maxHp;
+        // Stealth recalc — base + bonus + equipment stealth passives
+        let eqStealth=0;
+        for(const slot in this.equipment){
+            const item=this.equipment[slot];
+            if(!item)continue;
+            if(item.stealthVal)eqStealth+=item.stealthVal;
+            if(item.type==='trinket'&&item.passive==='bonus_stealth')eqStealth+=item.passiveVal;
+            // Heavy armor penalty
+            if(item.type==='armor'&&item.armorWeight==='plate')eqStealth-=2;
+            else if(item.type==='armor'&&item.armorWeight==='mail')eqStealth-=1;
+        }
+        let relicStealth=0;
+        if(this.relics){
+            if(this.relics.some(r=>r.id==='shadow_cloak'))relicStealth+=3;
+            if(this.relics.some(r=>r.id==='hunters_charm'))relicStealth+=2;
+        }
+        this.stealth=Math.max(0,this.baseStealth+this.bonusStealth+eqStealth+relicStealth);
     }
     equipItem(item){
         const slot=item.slot||'weapon';
@@ -3175,6 +3359,16 @@ function renderHud(){
     // Relics count
     const relicEl=document.getElementById('hud-relics');
     if(relicEl)relicEl.innerHTML=`<span style="color:#f93">${p.relics.length}/5</span>`;
+    // Noise bar
+    const noisePct=Math.max(0,Math.min(100,p.noise));
+    document.getElementById('bar-noise-fill').style.width=`${noisePct}%`;
+    const noiseFill=document.getElementById('bar-noise-fill');
+    noiseFill.className=noisePct<20?'noise-low':noisePct<50?'':'noise-mid';
+    if(noisePct>=70)noiseFill.className='noise-high';
+    if(noisePct>=90)noiseFill.className='noise-extreme';
+    document.getElementById('hud-noise').textContent=Math.floor(p.noise);
+    document.getElementById('hud-stealth').textContent=p.stealth;
+
     // Low HP danger
     const hpFill=document.getElementById('bar-hp-fill');
     if(p.hp<=p.maxHp*0.3)hpFill.style.background='#f55';
@@ -3191,6 +3385,8 @@ function renderHud(){
     document.getElementById('lh-gold').textContent=p.gold;
     document.getElementById('lh-keys').textContent=p.keys;
     document.getElementById('lh-floor').innerHTML=floorText;
+    document.getElementById('lh-noise').textContent=Math.floor(p.noise);
+    document.getElementById('lh-stealth').textContent=p.stealth;
 }
 
 function renderRest(){
@@ -3529,6 +3725,9 @@ function movePlayer(dx,dy){
     if(nx<0||nx>=MAP_W||ny<0||ny>=MAP_H)return;
     if(game.grid[ny][nx]==='#')return;
     p.x=nx;p.y=ny;sfxStep();
+    decayNoise(); // noise decays each step
+    // Dead Man's Boots: silent movement (otherwise tiny noise per step)
+    if(!hasRelic('dead_mans_boots')&&Math.random()<0.15)addNoise(1,'footstep');
 
     const room=game.getCurrentRoom();
     if(pendingRestRoom&&pendingRestRoom!==room)pendingRestRoom=null;
@@ -3538,6 +3737,9 @@ function movePlayer(dx,dy){
         if(room.specialType&&!room.specialHandled){triggerSpecialRoom(room);return}
         // Floor event trigger
         if(room._hasFloorEvent&&!room._floorEventHandled){triggerFloorEvent(room);return}
+        // Extreme noise: chance to spawn extra enemy
+        const extraEnemy=noiseExtraSpawnCheck(room);
+        if(extraEnemy){startCombat(extraEnemy,room);return}
         // Tension buildup — entering a room with no event
         tickTension();
     }
@@ -3556,7 +3758,15 @@ function movePlayer(dx,dy){
     // Enemy
     if(room){
         for(const e of room.enemies){
-            if(e.x===nx&&e.y===ny){startCombat(e,room);return}
+            if(e.x===nx&&e.y===ny){
+                // Low noise: chance to avoid non-boss encounters entirely
+                if(!e.isBoss&&noiseAvoidCheck()){
+                    // Slip past — move enemy out of the way
+                    e.x=e.x+(Math.random()<0.5?1:-1);e.y=e.y+(Math.random()<0.5?1:-1);
+                    break;
+                }
+                startCombat(e,room);return;
+            }
         }
     }
     // Chest
@@ -3608,7 +3818,10 @@ function movePlayer(dx,dy){
     if(game.grid[ny][nx]==='>'){
         sfxStairs();
         if(p.floor>=MAX_FLOOR){game.victory=true;renderAll();checkEndState();return}
-        p.floor++;addMsg(`You descend to floor ${p.floor}...`,'stairs');game.newFloor();
+        p.floor++;addMsg(`You descend to floor ${p.floor}...`,'stairs');
+        // Descending reduces noise — new floor, fresh start
+        p.noise=Math.max(0,Math.floor(p.noise*0.4));
+        game.newFloor();
         // Trinket: heal on floor
         const hofVal=getTrinketPassive('heal_on_floor');
         if(hofVal>0){p.hp=Math.min(p.maxHp,p.hp+hofVal);addMsg(`Trinket restores ${hofVal} HP.`,'hp')}
@@ -3640,6 +3853,7 @@ function openChest(chest){
         else{sfxTrap();const d=randInt(3,8+p.floor);p.hp-=d;addMsg(`TRAP! You take ${d} damage!`,'enemy');flashDamage();screenShake();if(p.isDead())return}
     }
     chest.opened=true;sfxChest();
+    addNoise(chest.type==='trapped'?12:chest.type==='locked'?8:5,'chest');
     const item=chest.item;
     if(AUTO_USE.has(item.type)){applyItem(item);addMsg(`★ Chest: ${item.name} — ${item.desc}`,'chest')}
     else{p.inventory.push(item);addMsg(`★ Chest: ${item.name} — added to bag`,'chest')}
@@ -3699,11 +3913,33 @@ function startCombat(enemy,room){
     if(enemy.traits&&enemy.traits.some(t=>t.id==='blessed'))applyStatus(enemy,'barrier',10,99);
     // Bone Ward relic: player starts with Barrier
     if(hasRelic('bone_ward'))applyStatus(game.player,'barrier',8,99);
-    // Ambusher bonus
-    if(enemy.role==='ambusher'&&!enemy.isBoss){
+    // Noise: combat generates noise
+    addNoise(enemy.isBoss?25:enemy.isElite?20:15,'combat');
+    // Noise-based ambush: high noise = enemy strikes first (non-boss)
+    let noiseAmbushed=false;
+    if(!enemy.isBoss&&noiseAmbushCheck(enemy)){
+        noiseAmbushed=true;
+        const d=Math.max(1,Math.floor(enemy.attack*0.4)-game.player.defense);
+        game.player.hp-=d;
+        combatLog.push({text:pick(NOISE_MSGS_AMBUSH),cls:'enemy'});
+        combatLog.push({text:`${enemy.name} strikes from the shadows for ${d}!`,cls:'enemy'});
+        flashDamage();screenShake();
+    }
+    // Ambusher bonus (role-based, separate from noise ambush)
+    if(!noiseAmbushed&&enemy.role==='ambusher'&&!enemy.isBoss){
         const d=Math.floor(enemy.attack*0.3);
         game.player.hp-=d;
         combatLog.push({text:`Ambush! ${enemy.name} strikes first for ${d}!`,cls:'enemy'});flashDamage();screenShake();
+    }
+    // Noise-based surprise: low noise = player gets a free hit
+    let surpriseRound=false;
+    if(!noiseAmbushed&&noiseSurpriseCheck(enemy)){
+        surpriseRound=true;
+        const d=Math.max(1,game.player.attack+randInt(1,5));
+        enemy.hp-=d;
+        combatLog.push({text:pick(NOISE_MSGS_SURPRISE),cls:'xp'});
+        combatLog.push({text:`You strike first for ${d} damage!`,cls:'xp'});
+        sfxSurpriseAttack();
     }
     rollEnemyIntent(enemy);
     renderCombat();
@@ -3832,6 +4068,7 @@ function combatAction(action){
         if(e.traits&&e.traits.some(t=>t.id==='thorny')){p.hp-=2;combatLog.push({text:"Thorns reflect 2 damage!",cls:'enemy'})}
         // Thorn Mantle relic (on enemy hit, not here — see enemy attack section)
         p.lastActions.push('attack');
+        addNoise(5,'attack'); // attacking is noisy
         playerActed=true;
     } else if(action==='defend'){
         sfxBlock();
@@ -3852,12 +4089,15 @@ function combatAction(action){
         if(hasRelic('quicksilver'))fleeChance+=0.15;
         fleeChance+=getTrinketPassive('flee_bonus');
         if(e.traits&&e.traits.some(t=>t.id==='swift'))fleeChance-=0.10;
-        if(Math.random()<fleeChance){sfxFlee();combatLog.push({text:"You flee!",cls:''});endCombat(false);return}
-        combatLog.push({text:"Failed to escape!",cls:'enemy'});p.lastActions.push('run');playerActed=true;
+        if(Math.random()<fleeChance){sfxFlee();combatLog.push({text:"You flee!",cls:''});addNoise(8,'flee');endCombat(false);return}
+        combatLog.push({text:"Failed to escape!",cls:'enemy'});addNoise(5,'flee_fail');p.lastActions.push('run');playerActed=true;
     } else if(action==='ability'){
         if(p.abilityCooldown>0){combatLog.push({text:`Ability on cooldown (${p.abilityCooldown} turns)`,cls:'dim'});renderCombat();return}
         const used=useAbility(e);if(!used){renderCombat();return}
         if(p.abilityMaxUses>0)p.abilityUsesLeft--;
+        // Loud abilities generate more noise
+        const loudAbilities=['fireball','rage','backstab'];
+        addNoise(loudAbilities.includes(p.cls.ability)?8:3,'ability');
         p.lastActions.push('ability');playerActed=true;
     }
 
@@ -4145,6 +4385,10 @@ function tryRest(){
     const idx=game.rooms.indexOf(room);
     game.restedRooms.add(idx);
     killStreak=0; // resting breaks kill momentum
+    // Resting reduces noise significantly
+    const noiseReduced=Math.min(p.noise,15);
+    p.noise=Math.max(0,p.noise-noiseReduced);
+    if(noiseReduced>5)addMsg("The quiet soothes. Your presence fades.",'hidden');
     const outcome=rollRestOutcome(p);
     addMsg(`— ${outcome.title} —`,'cyan');
     addMsg(outcome.flavor,'dim');
@@ -5218,6 +5462,7 @@ function saveGame(){
            detectHidden:game.player.detectHidden,disarmTrap:game.player.disarmTrap,
            equipment:game.player.equipment,
            bonusAttack:game.player.bonusAttack,bonusDefense:game.player.bonusDefense,bonusMaxHp:game.player.bonusMaxHp,
+           noise:game.player.noise,bonusStealth:game.player.bonusStealth,
            relics:game.player.relics,statusEffects:game.player.statusEffects,
            x:game.player.x,y:game.player.y},
         grid:game.grid,
@@ -5258,6 +5503,8 @@ function loadGame(){
     if(data.p.bonusAttack!==undefined)game.player.bonusAttack=data.p.bonusAttack;
     if(data.p.bonusDefense!==undefined)game.player.bonusDefense=data.p.bonusDefense;
     if(data.p.bonusMaxHp!==undefined)game.player.bonusMaxHp=data.p.bonusMaxHp;
+    if(data.p.noise!==undefined)game.player.noise=data.p.noise;
+    if(data.p.bonusStealth!==undefined)game.player.bonusStealth=data.p.bonusStealth;
     if(data.p.abilityMaxUses!==undefined)game.player.abilityMaxUses=data.p.abilityMaxUses;
     game.player.recalcStats();
     // Suspend-save: restore full dungeon state
@@ -5299,7 +5546,7 @@ function initClassSelect(){
     grid.innerHTML=CHARACTER_CLASSES.map((c,i)=>`
         <div class="class-card" onclick="selectClass(${i})">
             <h3>${c.name}</h3>
-            <div class="stats">HP:${c.hp} ATK:${c.attack} DEF:${c.defense}</div>
+            <div class="stats">HP:${c.hp} ATK:${c.attack} DEF:${c.defense} <span class="stealth-color">STL:${c.stealth||0}</span></div>
             <div class="ability">${c.abilityName} — ${c.abilityDesc}</div>
             <div class="desc">${c.desc}</div>
         </div>`).join('');
