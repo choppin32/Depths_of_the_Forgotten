@@ -2394,10 +2394,25 @@ function eventTone(freq,dur,vol,type='triangle'){
     }catch(e){}
 }
 
+// Track ALL pending music timeouts so we can cancel them cleanly
+let _musicTimeouts=[];
+function _musicTimeout(fn,ms){
+    const id=setTimeout(()=>{
+        _musicTimeouts=_musicTimeouts.filter(t=>t!==id);
+        fn();
+    },ms);
+    _musicTimeouts.push(id);
+    return id;
+}
+function _clearAllMusicTimeouts(){
+    _musicTimeouts.forEach(id=>clearTimeout(id));
+    _musicTimeouts=[];
+}
+
 // Duck music volume during event sounds, then restore
 function duckMusic(durationMs=1500){
     stopMusic();
-    setTimeout(()=>{if(game&&!game.victory&&soundEnabled)startMusic(game.player.floor,currentMusicMode)},durationMs);
+    _musicTimeout(()=>{if(game&&!game.victory&&soundEnabled&&!inCombat)startMusic(game.player.floor,currentMusicMode)},durationMs);
 }
 
 function sfxFloorEvent(){
@@ -2435,8 +2450,8 @@ function sfxTelegraph(){
 }
 function sfxBossFanfare(){
     // Dramatic descending fanfare, then rising dread — LOUD
+    // NOTE: no duckMusic here — combat manages its own music transitions
     if(!soundEnabled)return;
-    duckMusic(2200);
     [300,280,260,240,220,200,180,160].forEach((f,i)=>setTimeout(()=>eventTone(f,250,0.16,'triangle'),i*130));
     setTimeout(()=>{
         [160,200,260,330].forEach((f,i)=>setTimeout(()=>eventTone(f,200,0.14,'square'),i*120));
@@ -2444,6 +2459,7 @@ function sfxBossFanfare(){
 }
 function sfxCombatStart(){
     // Sharp metallic clash — two bright tones
+    // NOTE: no duckMusic here — combat manages its own music transitions
     if(!soundEnabled)return;
     eventTone(350,80,0.18,'square');
     setTimeout(()=>eventTone(520,70,0.15,'square'),80);
@@ -2910,6 +2926,7 @@ function startMusic(floor,mode='explore'){
 function stopMusic(){
     musicPlaying=false;
     if(musicTimer){clearTimeout(musicTimer);musicTimer=null}
+    _clearAllMusicTimeouts(); // kill ALL pending music restarts
 }
 
 function startCombatMusic(){
@@ -3868,9 +3885,9 @@ function startCombat(enemy,room){
     inCombat=true;combatEnemy=enemy;combatRoom=room;combatLog=[];
     resetTension();stopMusic();
     flashCombatStart();
-    if(enemy.isBoss){sfxBossFanfare();showEventBanner(`⚔ ${enemy.name.toUpperCase()}`,'danger');setTimeout(startCombatMusic,1800)}
-    else if(enemy.isElite){sfxCombatStart();showEventBanner('★ ELITE ENCOUNTER','danger');setTimeout(startCombatMusic,600)}
-    else{sfxCombatStart();showEventBanner('☠ AMBUSH!','danger');setTimeout(startCombatMusic,400)}
+    if(enemy.isBoss){sfxBossFanfare();showEventBanner(`⚔ ${enemy.name.toUpperCase()}`,'danger');_musicTimeout(startCombatMusic,1800)}
+    else if(enemy.isElite){sfxCombatStart();showEventBanner('★ ELITE ENCOUNTER','danger');_musicTimeout(startCombatMusic,600)}
+    else{sfxCombatStart();showEventBanner('☠ AMBUSH!','danger');_musicTimeout(startCombatMusic,400)}
     game.player.backstabReady=true;
     game.player.backstabUsedLastRound=false;
     game.player.defendCount=0;
@@ -4493,7 +4510,8 @@ function handleEnemyDefeat(enemy){
 function endCombat(resolved){
     document.getElementById('combat-screen').style.display='none';
     inCombat=false;
-    startExploreMusic();
+    stopMusic(); // clean stop — kills combat music AND all pending timeouts
+    startExploreMusic(); // fresh start of explore music
     tickTrinketCooldowns();
     const victoryRoom=combatRoom;
     const victorious=resolved&&combatEnemy&&combatEnemy.hp<=0;
