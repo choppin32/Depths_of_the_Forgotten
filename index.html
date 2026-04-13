@@ -1719,7 +1719,7 @@ const SPECIAL_ROOM_TYPES = [
     {id:'shrine',name:'Shrine',char:'+',color:'shrine',chance:0.04,desc:'A glowing altar hums with divine energy.',
      choices:['Pray for blessing (+3 random stat)','Touch the altar (random effect)']},
     {id:'campfire',name:'Campfire',char:'~',color:'campfire',chance:0.06,desc:'Warm embers crackle in a stone circle.',
-     choices:['Rest (heal 30% HP)','Meditate (restore 1 ability use)']},
+     choices:['(dynamic)'],dynamicChoices:true},
     {id:'prison',name:'Prison Cell',char:'P',color:'prison',chance:0.05,desc:'Iron bars hold a shadowy figure.',
      choices:['Free the prisoner (random reward or ambush)','Leave them']},
     {id:'vault',name:'Vault',char:'V',color:'vault',chance:0.04,desc:'A heavy iron door with intricate locks.',
@@ -1729,6 +1729,162 @@ const SPECIAL_ROOM_TYPES = [
     {id:'altar',name:'Cursed Altar',char:'A',color:'altar',chance:0.04,desc:'Dark energy swirls above a blood-stained altar.',
      choices:['Sacrifice HP (-20 HP, gain relic)','Sacrifice gold (-50g, gain rare item)','Walk away']},
 ];
+
+// ========== CAMPFIRE SCENARIOS ==========
+// Each campfire visit picks a random scenario with unique choices.
+const CAMPFIRE_SCENARIOS=[
+    {id:'stranger',
+     desc:'A hooded stranger sits across the fire. They don\'t look up.',
+     choices:[
+         {text:'Sit with them in silence',action:(p)=>{
+             const h=Math.floor(p.maxHp*0.2);p.hp=Math.min(p.maxHp,p.hp+h);
+             p.bonusDefense+=1;p.recalcStats();
+             addMsg(`You share the silence. Something eases. +${h} HP, +1 DEF`,'hp');
+         }},
+         {text:'Ask who they are',action:(p)=>{
+             if(Math.random()<0.5){const xp=15+p.floor*2;p.gainXp(xp);addMsg(`"I was you, once." They vanish. The fire dims. +${xp} XP`,'xp')}
+             else{addMsg("They look up. Their face is yours. You blink and they're gone.",'dim')}
+         }},
+         {text:'Rob them',action:(p)=>{
+             if(Math.random()<0.4){const g=randInt(20,50);p.gold+=g;addMsg(`They don't resist. +${g} gold. The fire goes cold.`,'gold')}
+             else{const d=randInt(8,18);p.hp-=d;addMsg(`They grab your wrist. Their grip is impossibly strong. -${d} HP`,'enemy');flashDamage();screenShake()}
+         }},
+     ]},
+    {id:'cook',
+     desc:'A blackened pot hangs over the flames. Something inside is bubbling. It smells like home.',
+     choices:[
+         {text:'Eat whatever it is',action:(p)=>{
+             const roll=Math.random();
+             if(roll<0.4){const h=Math.floor(p.maxHp*0.35);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`Tastes like your mother's cooking. You can't remember her face. +${h} HP`,'hp')}
+             else if(roll<0.7){p.bonusAttack+=1;p.bonusMaxHp+=3;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+3);addMsg("The warmth spreads through your muscles. ATK +1, Max HP +3",'hp')}
+             else{const d=randInt(3,8);p.hp-=d;addMsg(`Tastes like rot and regret. Your stomach rebels. -${d} HP`,'enemy');flashDamage()}
+         }},
+         {text:'Add something to the pot',action:(p)=>{
+             if(p.gold>=10){p.gold-=10;const h=Math.floor(p.maxHp*0.5);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`You toss in coins. The stew gleams. Drinking it heals everything it touches. +${h} HP (-10 gold)`,'hp')}
+             else addMsg("You have nothing to contribute. The pot bubbles in disappointment.",'dim');
+         }},
+         {text:'Kick it over',action:(p)=>{
+             p.bonusAttack+=2;p.recalcStats();addMsg("The fire hisses. Rage fills the vacuum where comfort was. ATK +2",'hp');
+             addMsg("Something in the dark thanks you for the offering.",'dim');
+         }},
+     ]},
+    {id:'ghost_story',
+     desc:'Scratched into the stone floor around the fire: a story. The handwriting changes three times.',
+     choices:[
+         {text:'Read the whole thing',action:(p)=>{
+             const xp=20+p.floor*3;p.gainXp(xp);
+             addMsg(`Three adventurers. Three attempts. Three deaths. You learn from all of them. +${xp} XP`,'xp');
+         }},
+         {text:'Add your own chapter',action:(p)=>{
+             p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);
+             addMsg("You scratch your story into the stone. It feels like making a promise. Max HP +5",'hp');
+         }},
+         {text:'Erase it',action:(p)=>{
+             p.bonusAttack+=1;p.bonusDefense+=1;p.recalcStats();
+             addMsg("Their stories end. Yours continues. ATK +1, DEF +1",'hp');
+             addMsg("The fire flares once, as if in protest.",'dim');
+         }},
+     ]},
+    {id:'burning_item',
+     desc:'Something is already burning in the fire. You could pull it out — or let it turn to ash.',
+     choices:[
+         {text:'Pull it out',action:(p)=>{
+             const d=randInt(3,8);p.hp-=d;
+             const item=cloneItem(pick(ITEM_TYPES));p.inventory.push(item);
+             addMsg(`Your hand burns. -${d} HP. But you saved a ${item.name}.`,'item');flashDamage();
+             showLootToast(item,'campfire',false);
+         }},
+         {text:'Feed the fire more',action:(p)=>{
+             if(p.gold>=15){p.gold-=15;p.bonusAttack+=2;p.bonusDefense+=1;p.recalcStats();
+             addMsg("You feed your coins to the flame. It roars. The warmth seeps into your bones. ATK +2, DEF +1 (-15 gold)",'hp')}
+             else{addMsg("The fire wants more. You have nothing. It sulks.",'dim')}
+         }},
+         {text:'Watch it burn',action:(p)=>{
+             const h=Math.floor(p.maxHp*0.25);p.hp=Math.min(p.maxHp,p.hp+h);
+             addMsg(`You watch something die. It's peaceful. +${h} HP`,'hp');
+         }},
+     ]},
+    {id:'warm_torch',
+     desc:'The fire is unnaturally warm. Your torch flickers eagerly toward it.',
+     choices:[
+         {text:'Hold your torch in the flames',action:(p)=>{
+             const t=p.equipment&&p.equipment.torch;
+             if(t){
+                 if(t.restDrain&&t.restDrain>0){t.restDrain=Math.max(0,t.restDrain-1);t.radius=Math.min(t.radius+1,t.maxRadius||7);
+                 addMsg(`The flame feeds your ${t.name}. Vision restored! (drain reset by 1)`,'hp')}
+                 else addMsg(`Your ${t.name} burns brighter for a moment, then settles. No effect.`,'dim');
+             } else addMsg("You have no torch to warm.",'dim');
+         }},
+         {text:'Warm your hands',action:(p)=>{
+             const h=Math.floor(p.maxHp*0.3);p.hp=Math.min(p.maxHp,p.hp+h);
+             if(p.abilityMaxUses>0){p.abilityUsesLeft=Math.min(p.abilityMaxUses,p.abilityUsesLeft+1)}
+             addMsg(`Warmth floods your fingers. Your body remembers what it means to be alive. +${h} HP, +1 ability use`,'hp');
+         }},
+         {text:'Stare into the flames',action:(p)=>{
+             const xp=12+p.floor*2;p.gainXp(xp);
+             addMsg(`In the fire you see shapes — paths not taken, enemies not yet met. +${xp} XP`,'xp');
+             if(BOSSES[p.floor])addMsg(`The flames show you ${BOSSES[p.floor].name}. It's already watching.`,'boss');
+         }},
+     ]},
+    {id:'singing',
+     desc:'The fire is humming. Not crackling — humming. A melody you almost recognize.',
+     choices:[
+         {text:'Hum along',action:(p)=>{
+             p.bonusMaxHp+=8;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+8);
+             addMsg("The melody fills something hollow inside you. Max HP +8",'hp');
+             addMsg("You can't remember the tune afterwards. But your body does.",'dim');
+         }},
+         {text:'Listen carefully',action:(p)=>{
+             const xp=18+p.floor*3;p.gainXp(xp);
+             addMsg(`The song is a map. Not of this place — of you. +${xp} XP`,'xp');
+         }},
+         {text:'Silence it',action:(p)=>{
+             p.bonusAttack+=2;p.recalcStats();
+             addMsg("You stamp it out. The silence that follows is absolute. ATK +2",'hp');
+             addMsg("The dungeon approves of silence.",'dim');
+         }},
+     ]},
+    {id:'shadows_dance',
+     desc:'Your shadow is doing something different from you. It\'s dancing around the fire.',
+     choices:[
+         {text:'Join the dance',action:(p)=>{
+             const h=Math.floor(p.maxHp*0.4);p.hp=Math.min(p.maxHp,p.hp+h);
+             addMsg(`You dance with your shadow. For a moment, nothing hurts. +${h} HP`,'hp');
+         }},
+         {text:'Grab your shadow',action:(p)=>{
+             if(Math.random()<0.5){p.bonusDefense+=2;p.recalcStats();addMsg("You catch it. It wraps around you like armor. DEF +2",'hp')}
+             else{const d=randInt(5,12);p.hp-=d;addMsg(`It grabs you back. It's stronger than you expected. -${d} HP`,'enemy');flashDamage();screenShake()}
+         }},
+         {text:'Ignore it',action:(p)=>{
+             addMsg("You look away. When you look back, it's standing perfectly still. Watching.",'dim');
+             p.bonusAttack+=1;p.recalcStats();addMsg("The unease sharpens your instincts. ATK +1",'hp');
+         }},
+     ]},
+    {id:'merchant_ghost',
+     desc:'A translucent figure tends the fire. Ghostly wares float beside them.',
+     choices:[
+         {text:'Trade gold for a blessing',action:(p)=>{
+             if(p.gold>=25){p.gold-=25;
+                 const stat=pick(['attack','defense','maxHp']);
+                 if(stat==='attack'){p.bonusAttack+=3;p.recalcStats();addMsg("The ghost takes your coin and whispers strength into your arm. ATK +3 (-25 gold)",'hp')}
+                 else if(stat==='defense'){p.bonusDefense+=3;p.recalcStats();addMsg("The ghost stitches protection into your skin. DEF +3 (-25 gold)",'hp')}
+                 else{p.bonusMaxHp+=12;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+12);addMsg("The ghost breathes years into your lungs. Max HP +12 (-25 gold)",'hp')}
+             } else addMsg("The ghost shakes its head. Not enough coin. It fades.",'dim');
+         }},
+         {text:'Trade HP for an item',action:(p)=>{
+             const cost=Math.floor(p.maxHp*0.15);p.hp=Math.max(1,p.hp-cost);
+             const item=cloneItem(pick(CHEST_ITEMS));p.inventory.push(item);
+             addMsg(`The ghost takes a piece of you. -${cost} HP. In return: ${item.name}`,'item');
+             showLootToast(item,'ghost merchant',false);flashDamage();
+         }},
+         {text:'Banish the ghost',action:(p)=>{
+             const xp=10+p.floor*2;p.gainXp(xp);
+             addMsg(`You dispel the spirit. It screams. The fire turns blue, then dies. +${xp} XP`,'xp');
+         }},
+     ]},
+];
+
+function getCampfireScenario(){return pick(CAMPFIRE_SCENARIOS)}
 
 // ========== V1.1 RELICS ==========
 const RELICS = [
@@ -4354,6 +4510,20 @@ function triggerSpecialRoom(room){
         displayName=room.shrineName;
         displayDesc=room.shrineDesc;
     }
+    // Campfire: pick a random scenario and build dynamic choices
+    if(srt.id==='campfire'){
+        const scenario=getCampfireScenario();
+        room._campfireScenario=scenario;
+        displayDesc=scenario.desc;
+        let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+        html+=`<h2 style="color:#f93">CAMPFIRE</h2><p style="color:#bbb;margin-bottom:12px">${displayDesc}</p>`;
+        scenario.choices.forEach((c,i)=>{
+            html+=`<div><button onclick="handleSpecialChoice('campfire',${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
+        });
+        document.getElementById('item-box').innerHTML=html;
+        document.getElementById('item-screen').style.display='flex';
+        return;
+    }
     let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
     html+=`<h2 style="color:#f93">${displayName.toUpperCase()}</h2><p style="color:#bbb;margin-bottom:12px">${displayDesc}</p>`;
     srt.choices.forEach((c,i)=>{
@@ -4377,8 +4547,14 @@ function handleSpecialChoice(roomId,choiceIdx){
             else{const d=randInt(5,15);p.hp-=d;addMsg(`Something bites back. Pain blooms through your hand. -${d} HP`,'enemy')}
         }
     } else if(roomId==='campfire'){
-        if(choiceIdx===0){const heal=Math.floor(p.maxHp*0.3);p.hp=Math.min(p.maxHp,p.hp+heal);addMsg(`You rest by the fire. +${heal} HP`,'hp')}
-        else{if(p.abilityMaxUses>0){p.abilityUsesLeft=Math.min(p.abilityMaxUses,p.abilityUsesLeft+1);addMsg("Meditation restores 1 ability use.",'xp')}else addMsg("You feel at peace.",'dim')}
+        // Dynamic campfire scenarios
+        const room=game.getCurrentRoom();
+        const scenario=room&&room._campfireScenario;
+        if(scenario&&scenario.choices[choiceIdx]&&scenario.choices[choiceIdx].action){
+            scenario.choices[choiceIdx].action(p);
+        } else {
+            addMsg("The fire crackles. Nothing happens.",'dim');
+        }
     } else if(roomId==='prison'){
         if(choiceIdx===0){
             if(Math.random()<0.6){const gold=randInt(20,60);p.gold+=gold;addMsg(`The prisoner thanks you! +${gold} gold`,'gold')}
