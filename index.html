@@ -1974,7 +1974,7 @@ const SPECIAL_ROOM_TYPES = [
     {id:'campfire',name:'Campfire',char:'~',color:'campfire',chance:0.06,desc:'Warm embers crackle in a stone circle.',
      choices:['(dynamic)'],dynamicChoices:true},
     {id:'prison',name:'Prison Cell',char:'P',color:'prison',chance:0.05,desc:'Iron bars hold a shadowy figure.',
-     choices:['Free the prisoner (random reward or ambush)','Leave them']},
+     choices:['(dynamic)'],dynamicChoices:true},
     {id:'vault',name:'Vault',char:'V',color:'vault',chance:0.04,desc:'A heavy iron door with intricate locks.',
      choices:['Use a key to enter','Try to force it open (may trap)']},
     {id:'lore',name:'Lore Chamber',char:'L',color:'lore',chance:0.06,desc:'Ancient texts line the walls.',
@@ -1982,6 +1982,121 @@ const SPECIAL_ROOM_TYPES = [
     {id:'altar',name:'Cursed Altar',char:'A',color:'altar',chance:0.04,desc:'Dark energy swirls above a blood-stained altar.',
      choices:['Sacrifice HP (-20 HP, gain relic)','Sacrifice gold (-50g, gain rare item)','Walk away']},
 ];
+
+// ========== PRISON CELL SCENARIOS ==========
+// Each prison visit picks a random scenario with unique choices.
+const PRISON_SCENARIOS=[
+    {id:'wounded_knight',
+     desc:'A knight in rusted armor slumps against the bars. Blood seeps from beneath his breastplate. He whispers: "Please... I have a family."',
+     choices:[
+         {text:'Break the lock and free him',action:(p)=>{addNoise(14,'prison_break');if(Math.random()<0.7){p.bonusDefense+=2;p.recalcStats();addMsg("He teaches you a defensive stance before limping away. DEF +2",'hp')}else{const d=randInt(5,12);p.hp-=d;addMsg(`He grabs your weapon and slashes you. "Fool." -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Slide him a healing potion',action:(p)=>{const h=p.inventory.findIndex(i=>i.type==='heal');if(h>=0){p.inventory.splice(h,1);const g=randInt(30,70);p.gold+=g;addMsg(`He presses coins through the bars. "Bless you." +${g} gold`,'gold')}else addMsg("You have nothing to give him.",'dim')}},
+         {text:'Ask him what he knows',action:(p)=>{addNoise(3,'whisper');const xp=12+p.floor*2;p.gainXp(xp);addMsg(`He tells you about the floors below. Useful intel. +${xp} XP`,'xp')}},
+         {text:'Put him out of his misery',action:(p)=>{addNoise(8,'mercy_kill');p.bonusAttack+=1;p.recalcStats();const g=randInt(10,30);p.gold+=g;addMsg(`A quick strike. You take his coin purse. ATK +1, +${g} gold`,'hp')}},
+         {text:'Walk away',action:(p)=>{addMsg("His pleas follow you down the corridor.",'dim')}},
+     ]},
+    {id:'chained_beast',
+     desc:'Something enormous is chained to the wall. Matted fur, yellow eyes, labored breathing. The chains are corroded. It watches you with terrifying intelligence.',
+     choices:[
+         {text:'Break the chains',action:(p)=>{addNoise(18,'chain_break');if(Math.random()<0.5){p.bonusAttack+=3;p.recalcStats();addMsg("It bows its head. Something passes between you. Primal power. ATK +3",'hp')}else{const d=randInt(10,25);p.hp-=d;addMsg(`It lunges the moment it's free. Teeth and claws. -${d} HP`,'enemy');flashDamage();screenShake(true)}}},
+         {text:'Feed it rations',action:(p)=>{addNoise(4,'feeding');p.bonusDefense+=1;p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);addMsg("It eats from your hand. A bond forms in the dark. DEF +1, Max HP +5",'hp')}},
+         {text:'Study the chains for materials',action:(p)=>{addNoise(6,'chain_study');const item=cloneItem(pick(ITEM_TYPES));p.inventory.push(item);addMsg(`You salvage: ${item.name}`,'item');showLootToast(item,'prison',false)}},
+         {text:'Mercy kill it',action:(p)=>{addNoise(10,'mercy_kill');p.bonusAttack+=2;p.recalcStats();addMsg("It doesn't fight. The light leaves its eyes slowly. You feel stronger. Emptier. ATK +2",'hp')}},
+         {text:'Leave it chained',action:(p)=>{addMsg("You back away. The yellow eyes never blink. They will remember you.",'dim')}},
+     ]},
+    {id:'child_ghost',
+     desc:'A small figure sits in the corner of the cell. Translucent. A child. It looks up with hollow eyes and says: "Can you see me?"',
+     choices:[
+         {text:'"Yes, I can see you"',action:(p)=>{addNoise(2,'whisper');const h=Math.floor(p.maxHp*0.3);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`It smiles. Warmth fills the room. The loneliness lifts. +${h} HP`,'hp')}},
+         {text:'Ask how it died',action:(p)=>{addNoise(3,'whisper');const xp=15+p.floor*3;p.gainXp(xp);addMsg(`The story is horrible. But you learn what killed it — and how to avoid the same fate. +${xp} XP`,'xp')}},
+         {text:'Offer to carry its message',action:(p)=>{p.bonusDefense+=1;p.bonusMaxHp+=3;p.recalcStats();addMsg("It whispers a name. You feel watched over. Protected. DEF +1, Max HP +3",'hp')}},
+         {text:'Try to banish it',action:(p)=>{addNoise(10,'banish');if(Math.random()<0.5){p.bonusAttack+=2;p.recalcStats();addMsg("It shrieks. The energy absorbs into you. ATK +2",'hp');screenShake()}else{applyStatus(p,'curse',0,3);addMsg("It shrieks. The curse settles into your bones.",'enemy')}}},
+         {text:'Ignore it and move on',action:(p)=>{addMsg("You pretend not to see. It follows you for three rooms before fading.",'dim')}},
+     ]},
+    {id:'mad_prisoner',
+     desc:'A wild-eyed man presses his face between the bars. His teeth are filed to points. "Let me out let me out let me OUT. I\'ll give you anything. I know where the treasure is."',
+     choices:[
+         {text:'Free him for the treasure',action:(p)=>{addNoise(14,'prison_break');if(Math.random()<0.4){const g=randInt(50,120);p.gold+=g;addMsg(`He wasn't lying. A hidden cache behind the wall. +${g} gold!`,'gold')}else{const d=randInt(8,18);p.hp-=d;addMsg(`He tackles you the moment the door opens. Biting. Clawing. -${d} HP`,'enemy');flashDamage();screenShake()}}},
+         {text:'Demand the location first',action:(p)=>{addNoise(5,'interrogate');if(Math.random()<0.5){const g=randInt(30,70);p.gold+=g;addMsg(`He gives real directions. Gold hidden in a crack nearby. +${g} gold`,'gold')}else{const xp=10+p.floor*2;p.gainXp(xp);addMsg(`He babbles nonsense. But some of it... makes sense. +${xp} XP`,'xp')}}},
+         {text:'Give him food through the bars',action:(p)=>{addNoise(2,'feeding');if(Math.random()<0.6){const item=cloneItem(pick(ITEM_TYPES));p.inventory.push(item);addMsg(`He calms slightly. Pushes something through the bars: ${item.name}`,'item');showLootToast(item,'prison',false)}else{addMsg("He snatches it and cackles. You get nothing in return.",'dim')}}},
+         {text:'Put him down — he\'s too far gone',action:(p)=>{addNoise(8,'mercy_kill');p.bonusAttack+=1;p.recalcStats();addMsg("The madness leaves his eyes. Just for a moment, he looks grateful. ATK +1",'hp')}},
+         {text:'Back away slowly',action:(p)=>{addMsg("His screaming follows you. It takes a long time to fade.",'dim')}},
+     ]},
+    {id:'dead_prisoner',
+     desc:'The cell is occupied by a corpse. It\'s been here a while. Rats scatter as you approach. A journal lies near the skeletal hand.',
+     choices:[
+         {text:'Read the journal',action:(p)=>{addNoise(2,'study');const xp=15+p.floor*3;p.gainXp(xp);addMsg(`A record of the dungeon\'s layout. Invaluable. +${xp} XP`,'xp')}},
+         {text:'Search the body',action:(p)=>{addNoise(4,'search');if(Math.random()<0.6){const g=randInt(15,45);p.gold+=g;const item=cloneItem(pick(ITEM_TYPES));p.inventory.push(item);addMsg(`${item.name} and ${g} gold on the corpse.`,'gold');showLootToast(item,'prison',false)}else{addMsg("Picked clean already. Nothing of value.",'dim')}}},
+         {text:'Pry the bars loose for scrap',action:(p)=>{addNoise(16,'pry_bars');p.bonusDefense+=2;p.recalcStats();addMsg("Iron bars. Crude but effective reinforcement. DEF +2",'hp')}},
+         {text:'Bury the remains',action:(p)=>{addNoise(5,'digging');const h=Math.floor(p.maxHp*0.15);p.hp=Math.min(p.maxHp,p.hp+h);const xp=8+p.floor*2;p.gainXp(xp);addMsg(`A small act of decency. The dungeon seems lighter. +${h} HP, +${xp} XP`,'hp')}},
+         {text:'Leave the dead alone',action:(p)=>{addMsg("Some things should rest. Even down here.",'dim')}},
+     ]},
+    {id:'doppelganger',
+     desc:'The figure in the cell looks exactly like you. Same clothes. Same scars. Same expression of horror. It mouths: "Don\'t let me out."',
+     choices:[
+         {text:'Open the cell',action:(p)=>{addNoise(12,'cell_open');if(Math.random()<0.4){p.bonusAttack+=2;p.bonusDefense+=2;p.recalcStats();addMsg("It merges with you. Two become one. Stronger. ATK +2, DEF +2",'hp')}else{const d=randInt(10,20);p.hp-=d;p.maxHp=Math.max(10,p.maxHp-5);p.recalcStats();addMsg(`It attacks your mind. Identity fractures. -${d} HP, -5 Max HP`,'enemy');flashDamage();screenShake(true)}}},
+         {text:'Talk to it through the bars',action:(p)=>{addNoise(3,'whisper');const xp=20+p.floor*2;p.gainXp(xp);addMsg(`It tells you things about yourself you didn't know. Terrible things. True things. +${xp} XP`,'xp')}},
+         {text:'Ask it how to survive',action:(p)=>{addNoise(2,'whisper');p.bonusDefense+=1;p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);addMsg(`"Don't trust the shrine on floor ${Math.min(40,p.floor+5)}." Useful or not, you feel prepared. DEF +1, Max HP +5`,'hp')}},
+         {text:'Kill it before it escapes',action:(p)=>{addNoise(10,'kill');if(Math.random()<0.5){p.bonusAttack+=2;p.recalcStats();addMsg("It dissolves into shadow. The shadow sinks into your blade. ATK +2",'hp')}else{const d=randInt(5,12);p.hp-=d;addMsg(`It bleeds. You bleed in the same spot. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Refuse to look at it',action:(p)=>{addMsg("You turn away. 'You'll be back,' it says. In your voice.",'dim')}},
+     ]},
+    {id:'trapped_merchant',
+     desc:'A portly man in fine but filthy clothes grips the bars. "Bandits locked me in here! I\'m a merchant — I can make it worth your while!"',
+     choices:[
+         {text:'Use a key to free him',action:(p)=>{if(p.keys>0){p.keys--;addNoise(5,'unlock');const g=randInt(40,90);p.gold+=g;const item=cloneItem(pick(CHEST_ITEMS));p.inventory.push(item);addMsg(`"Thank you! Take this — ${item.name} and ${g} gold!"`,'gold');showLootToast(item,'prison',false)}else addMsg("You don't have a key.",'enemy')}},
+         {text:'Break the lock by force',action:(p)=>{addNoise(16,'break_lock');if(Math.random()<0.6){const g=randInt(30,70);p.gold+=g;addMsg(`The lock shatters. The merchant tosses you a purse. +${g} gold`,'gold')}else{const d=randInt(5,10);p.hp-=d;addMsg(`The lock holds. Your hand doesn't. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Demand payment first',action:(p)=>{addNoise(4,'negotiate');const g=randInt(20,50);p.gold+=g;addMsg(`He slides coins through the bars. "This is all I have on me." +${g} gold`,'gold')}},
+         {text:'Search around the cell for the key',action:(p)=>{addNoise(6,'search');if(Math.random()<0.5){p.keys--;const g=randInt(50,100);p.gold+=g;addMsg(`Found a key on the wall hook! The merchant rewards you handsomely. +${g} gold`,'gold')}else{const xp=8+p.floor;p.gainXp(xp);addMsg(`No key. But you find scratched notes on the wall. +${xp} XP`,'xp')}}},
+         {text:'"Not my problem"',action:(p)=>{addMsg('"Please! PLEASE!" His screaming haunts you for rooms.','dim')}},
+     ]},
+    {id:'whispering_prisoner',
+     desc:'The cell appears empty. Then you hear it — a voice from the darkness within. It speaks in a language you shouldn\'t understand, but do.',
+     choices:[
+         {text:'Listen to the full message',action:(p)=>{addNoise(1,'listen');const xp=20+p.floor*3;p.gainXp(xp);p.bonusMaxHp+=3;p.recalcStats();addMsg(`Ancient knowledge pours in. Your mind expands painfully. +${xp} XP, Max HP +3`,'xp')}},
+         {text:'Answer in the same tongue',action:(p)=>{addNoise(8,'dark_speech');if(Math.random()<0.5){p.bonusAttack+=2;p.bonusDefense+=2;p.recalcStats();addMsg("It teaches you words of power. ATK +2, DEF +2",'hp')}else{applyStatus(p,'curse',0,4);addMsg("It teaches you words of binding. You are the student now. Cursed.",'enemy')}}},
+         {text:'Reach into the darkness',action:(p)=>{addNoise(5,'reach');if(Math.random()<0.5){const item=cloneItem(pick(CHEST_ITEMS));p.inventory.push(item);addMsg(`Something cold presses into your palm: ${item.name}`,'item');showLootToast(item,'prison',false)}else{const d=randInt(6,14);p.hp-=d;addMsg(`Fingers close around your wrist. Ice-cold. Crushing. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Seal the cell with whatever you can find',action:(p)=>{addNoise(10,'seal');p.bonusDefense+=1;p.recalcStats();addMsg("You pile rubble against the bars. The voice fades. You hope it fades. DEF +1",'hp')}},
+         {text:'Cover your ears and run',action:(p)=>{addMsg("You run. The words follow. They live in your memory now.",'dim');const xp=5+p.floor;p.gainXp(xp)}},
+     ]},
+    {id:'self_imprisoned',
+     desc:'A woman sits calmly in the cell. The door is unlocked — she chose to be here. "Don\'t open it," she says. "I locked myself in for a reason."',
+     choices:[
+         {text:'Ask why she locked herself in',action:(p)=>{addNoise(2,'conversation');const xp=15+p.floor*2;p.gainXp(xp);addMsg(`"Because of what I become at night." The answer chills you. +${xp} XP`,'xp')}},
+         {text:'Open the door anyway',action:(p)=>{addNoise(8,'door_open');if(Math.random()<0.3){p.bonusAttack+=3;p.bonusDefense+=1;p.recalcStats();addMsg("She transforms. Not into a monster — into something magnificent. She grants you her blessing. ATK +3, DEF +1",'hp')}else{const d=randInt(12,25);p.hp-=d;addMsg(`She transforms. Into something with too many teeth. -${d} HP`,'enemy');flashDamage();screenShake(true)}}},
+         {text:'Offer to stand guard for the night',action:(p)=>{addNoise(1,'guard');const h=Math.floor(p.maxHp*0.25);p.hp=Math.min(p.maxHp,p.hp+h);p.bonusDefense+=1;p.recalcStats();addMsg(`She sleeps peacefully. You feel... good. It's been a while. +${h} HP, DEF +1`,'hp')}},
+         {text:'Slide her some food and water',action:(p)=>{addNoise(1,'feeding');p.bonusStealth+=1;p.recalcStats();addMsg("She whispers a technique for moving through shadows. Stealth +1",'hidden')}},
+         {text:'Respect her choice and leave',action:(p)=>{addMsg("She nods. 'Wise.' The door stays shut.",'dim')}},
+     ]},
+    {id:'hanging_corpse',
+     desc:'The prisoner didn\'t wait for rescue. The body sways gently from a strip of torn cloth. Something glints on the floor beneath.',
+     choices:[
+         {text:'Search the body',action:(p)=>{addNoise(4,'search');const g=randInt(15,40);p.gold+=g;if(Math.random()<0.5){const item=cloneItem(pick(ITEM_TYPES));p.inventory.push(item);addMsg(`${item.name} and ${g} gold.`,'gold');showLootToast(item,'prison',false)}else{addMsg(`Just ${g} gold and a note: "Floor ${Math.min(40,p.floor+3)} — don't trust the shrine."`,'gold')}}},
+         {text:'Cut it down and bury it',action:(p)=>{addNoise(5,'cut_down');const h=Math.floor(p.maxHp*0.15);p.hp=Math.min(p.maxHp,p.hp+h);const xp=10+p.floor*2;p.gainXp(xp);addMsg(`Kindness echoes in the dark. +${h} HP, +${xp} XP`,'hp')}},
+         {text:'Take the cloth strip — it might be useful',action:(p)=>{addNoise(3,'loot');p.bonusDefense+=1;p.recalcStats();addMsg("You fashion a crude bandage. Resourceful. Grim. DEF +1",'hp')}},
+         {text:'Read the scratches on the wall',action:(p)=>{addNoise(1,'study');const xp=12+p.floor*3;p.gainXp(xp);addMsg(`Tally marks. Hundreds. And a map scratched in the final days. +${xp} XP`,'xp')}},
+         {text:'Avert your eyes and leave',action:(p)=>{addMsg("Some sights you carry forever.",'dim')}},
+     ]},
+    {id:'demon_prisoner',
+     desc:'It sits cross-legged, hovering an inch off the floor. Red skin, curved horns, a smile full of malice. "Make a deal," it says. "Everyone does, eventually."',
+     choices:[
+         {text:'Accept the deal — power for a price',action:(p)=>{addNoise(10,'dark_deal');p.bonusAttack+=3;p.bonusDefense+=2;p.recalcStats();p.maxHp=Math.max(10,p.maxHp-8);p.hp=Math.min(p.maxHp,p.hp);addMsg("Power floods you. Something leaves. ATK +3, DEF +2, but -8 Max HP permanently.",'hp')}},
+         {text:'Counter-offer — your blood for knowledge',action:(p)=>{addNoise(6,'blood_deal');const d=randInt(5,10);p.hp-=d;const xp=30+p.floor*3;p.gainXp(xp);addMsg(`It drinks the blood from your cut palm. Visions explode. -${d} HP, +${xp} XP`,'xp');flashDamage()}},
+         {text:'Try to banish it',action:(p)=>{addNoise(12,'banish');if(Math.random()<0.4){awardRelic('prison');addMsg("It screams. It dissolves. Something falls where it sat.",'boss')}else{const d=randInt(8,18);p.hp-=d;applyStatus(p,'curse',0,3);addMsg(`It laughs. Fire licks your skin. -${d} HP. Cursed.`,'enemy');flashDamage();screenShake()}}},
+         {text:'Ask it about the dungeon\'s master',action:(p)=>{addNoise(3,'conversation');const xp=18+p.floor*2;p.gainXp(xp);addMsg(`"Your master? Oh, it knows you're coming. It has always known." +${xp} XP`,'xp')}},
+         {text:'Refuse and walk away',action:(p)=>{addMsg('"See you on the next floor," it calls. You don\'t look back.','dim')}},
+     ]},
+    {id:'mirror_prisoner',
+     desc:'The cell contains only a mirror. In the reflection, you see yourself — but behind bars. The reflected you presses against the glass and mouths: "Switch places."',
+     choices:[
+         {text:'Touch the mirror',action:(p)=>{addNoise(5,'mirror_touch');if(Math.random()<0.5){p.bonusAttack+=1;p.bonusDefense+=1;p.bonusMaxHp+=5;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+5);addMsg("The world flickers. You're... different. Better? ATK +1, DEF +1, Max HP +5",'hp')}else{const d=randInt(8,15);p.hp-=d;addMsg(`The glass cracks. Your reflection grins. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Smash the mirror',action:(p)=>{addNoise(15,'shatter');p.bonusAttack+=2;p.recalcStats();const g=randInt(10,30);p.gold+=g;addMsg(`Seven years bad luck. But the shards are valuable. ATK +2, +${g} gold`,'hp')}},
+         {text:'Turn the mirror to face the wall',action:(p)=>{addNoise(4,'move_mirror');p.bonusDefense+=1;p.recalcStats();addMsg("Something screams behind the glass. Muffled now. DEF +1",'hp')}},
+         {text:'Stare into your own eyes',action:(p)=>{addNoise(1,'stare');const xp=15+p.floor*2;p.gainXp(xp);addMsg(`You see floors you haven't reached yet. The knowledge burns. +${xp} XP`,'xp')}},
+         {text:'Close your eyes and leave',action:(p)=>{addMsg("You hear the glass crack as you walk away. You don't look back.",'dim')}},
+     ]},
+];
+
+function getPrisonScenario(){return pick(PRISON_SCENARIOS)}
 
 // ========== CAMPFIRE SCENARIOS ==========
 // Each campfire visit picks a random scenario with unique choices.
@@ -4999,6 +5114,20 @@ function triggerSpecialRoom(room){
         displayName=room.shrineName;
         displayDesc=room.shrineDesc;
     }
+    // Prison: pick a random scenario and build dynamic choices
+    if(srt.id==='prison'){
+        const scenario=getPrisonScenario();
+        room._prisonScenario=scenario;
+        displayDesc=scenario.desc;
+        let html=`<button class="overlay-close" onclick="inEvent=false;document.getElementById('item-screen').style.display='none'">X</button>`;
+        html+=`<h2 style="color:#f93">PRISON CELL</h2><p style="color:#bbb;margin-bottom:12px">${displayDesc}</p>`;
+        scenario.choices.forEach((c,i)=>{
+            html+=`<div><button onclick="handleSpecialChoice('prison',${i})" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
+        });
+        document.getElementById('item-box').innerHTML=html;
+        document.getElementById('item-screen').style.display='flex';
+        return;
+    }
     // Campfire: pick a random scenario and build dynamic choices
     if(srt.id==='campfire'){
         const scenario=getCampfireScenario();
@@ -5051,11 +5180,14 @@ function handleSpecialChoice(roomId,choiceIdx){
         p.noise=Math.max(0,p.noise-10);
         if(p.noise<30)addMsg("The fire's warmth masks your presence.",'hidden');
     } else if(roomId==='prison'){
-        if(choiceIdx===0){
-            addNoise(14,'prison_break'); // breaking someone out is loud
-            if(Math.random()<0.6){const gold=randInt(20,60);p.gold+=gold;addMsg(`The prisoner thanks you! +${gold} gold`,'gold')}
-            else{const d=randInt(5,15);p.hp-=d;addMsg(`It was a trap! Ambush! -${d} HP`,'enemy')}
-        } else addMsg("You leave the prisoner.",'dim');
+        // Dynamic prison scenarios
+        const room=game.getCurrentRoom();
+        const scenario=room&&room._prisonScenario;
+        if(scenario&&scenario.choices[choiceIdx]&&scenario.choices[choiceIdx].action){
+            scenario.choices[choiceIdx].action(p);
+        } else {
+            addMsg("The cell stands silent.",'dim');
+        }
     } else if(roomId==='vault'){
         if(choiceIdx===0){
             if(p.keys>0){p.keys--;const gold=randInt(50,150);p.gold+=gold;addMsg(`Vault opened! +${gold} gold!`,'gold');
