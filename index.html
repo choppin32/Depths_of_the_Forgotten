@@ -5222,7 +5222,9 @@ function openShop(){
     renderShopItems();
     document.getElementById('shop-screen').style.display='flex';
 }
+let _shopCooldown=false;
 function buyItem(idx){
+    if(_shopCooldown)return;_shopCooldown=true;setTimeout(()=>_shopCooldown=false,300);
     const items=getShopItems(game.player.floor);const item=items[idx];
     let cost=item.cost;
     if(hasRelic('merchants_coin'))cost=Math.floor(cost*0.85);
@@ -5231,11 +5233,20 @@ function buyItem(idx){
     game.player.gold-=cost;sfxItem();
     if(game.analytics)game.analytics.goldSpent+=cost;
     const bought=cloneItem(item);delete bought.cost;
-    if(AUTO_USE.has(bought.type)){applyItem(bought);addMsg(`Bought ${item.name} for ${cost}g`,'gold')}
-    else{game.player.inventory.push(bought);addMsg(`Bought ${item.name} for ${cost}g — added to bag`,'gold')}
+    // Equippable items auto-equip on purchase (old item goes to bag)
+    const EQUIPPABLE=new Set(['weapon','armor','ring_atk','ring_def','amulet_hp','trinket','torch']);
+    if(AUTO_USE.has(bought.type)){
+        applyItem(bought);addMsg(`Bought ${item.name} for ${cost}g`,'gold');
+    } else if(EQUIPPABLE.has(bought.type)){
+        applyItem(bought);addMsg(`Bought & equipped ${item.name} for ${cost}g`,'gold');
+        showLootToast(bought,'shop',false);
+    } else {
+        game.player.inventory.push(bought);addMsg(`Bought ${item.name} for ${cost}g — added to bag`,'gold');
+    }
     renderShopItems();
 }
 function sellItem(idx){
+    if(_shopCooldown)return;_shopCooldown=true;setTimeout(()=>_shopCooldown=false,300);
     const p=game.player;
     const item=p.inventory[idx];
     if(!item)return;
@@ -5249,6 +5260,7 @@ function sellItem(idx){
     renderShopItems();
 }
 function sellEquipped(slot){
+    if(_shopCooldown)return;_shopCooldown=true;setTimeout(()=>_shopCooldown=false,300);
     const p=game.player;
     const item=p.equipment[slot];
     if(!item)return;
