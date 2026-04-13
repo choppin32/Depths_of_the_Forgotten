@@ -5028,16 +5028,18 @@ function handleSpecialChoice(roomId,choiceIdx){
     document.getElementById('item-screen').style.display='none';
     if(roomId==='shrine'){
         if(choiceIdx===0){
+            addNoise(8,'shrine_pray');
             const stat=pick(['attack','defense','hp']);
             if(stat==='attack'){p.bonusAttack+=3;p.recalcStats();addMsg("Something seeps into your muscles, coiling tight. You feel stronger. ATK +3",'hp')}
             else if(stat==='defense'){p.bonusDefense+=3;p.recalcStats();addMsg("Your skin prickles and hardens. It doesn't feel like a gift. DEF +3",'hp')}
             else{p.bonusMaxHp+=15;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+15);addMsg("Warmth floods through you — too warm, like a fever. HP +15",'hp')}
         } else {
+            addNoise(5,'shrine_touch');
             if(Math.random()<0.5){p.hp=Math.min(p.maxHp,p.hp+Math.floor(p.maxHp*0.5));addMsg("The altar shudders. Your wounds knit shut — the flesh remembers a shape that isn't quite right.",'hp')}
             else{const d=randInt(5,15);p.hp-=d;addMsg(`Something bites back. Pain blooms through your hand. -${d} HP`,'enemy')}
         }
     } else if(roomId==='campfire'){
-        // Dynamic campfire scenarios
+        // Dynamic campfire scenarios — campfires are quiet (reduce noise)
         const room=game.getCurrentRoom();
         const scenario=room&&room._campfireScenario;
         if(scenario&&scenario.choices[choiceIdx]&&scenario.choices[choiceIdx].action){
@@ -5045,26 +5047,32 @@ function handleSpecialChoice(roomId,choiceIdx){
         } else {
             addMsg("The fire crackles. Nothing happens.",'dim');
         }
+        // Campfires reduce noise — resting by fire is calming
+        p.noise=Math.max(0,p.noise-10);
+        if(p.noise<30)addMsg("The fire's warmth masks your presence.",'hidden');
     } else if(roomId==='prison'){
         if(choiceIdx===0){
+            addNoise(14,'prison_break'); // breaking someone out is loud
             if(Math.random()<0.6){const gold=randInt(20,60);p.gold+=gold;addMsg(`The prisoner thanks you! +${gold} gold`,'gold')}
             else{const d=randInt(5,15);p.hp-=d;addMsg(`It was a trap! Ambush! -${d} HP`,'enemy')}
         } else addMsg("You leave the prisoner.",'dim');
     } else if(roomId==='vault'){
         if(choiceIdx===0){
             if(p.keys>0){p.keys--;const gold=randInt(50,150);p.gold+=gold;addMsg(`Vault opened! +${gold} gold!`,'gold');
+                addNoise(8,'vault_key'); // unlocking is moderately noisy
                 if(Math.random()<0.3)awardRelic('vault');
             } else addMsg("You don't have a key.",'enemy');
         } else {
+            addNoise(18,'vault_force'); // forcing a vault door is VERY loud
             if(Math.random()<p.disarmTrap){const gold=randInt(30,80);p.gold+=gold;addMsg(`Forced open! +${gold} gold`,'gold')}
-            else{const d=randInt(8,20);p.hp-=d;addMsg(`Trap! -${d} HP!`,'enemy')}
+            else{const d=randInt(8,20);p.hp-=d;addMsg(`Trap! -${d} HP!`,'enemy');flashDamage()}
         }
     } else if(roomId==='lore'){
-        if(choiceIdx===0){const xp=10+p.floor*3;if(p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}!`,'xp')}else addMsg(`Gained ${xp} XP from study.`,'xp')}
-        else{if(BOSSES[p.floor])addMsg(`Hint: ${BOSSES[p.floor].name} weakness — vary your tactics!`,'boss');else addMsg("The texts speak of deeper horrors...",'dim')}
+        if(choiceIdx===0){addNoise(2,'study');const xp=10+p.floor*3;if(p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}!`,'xp')}else addMsg(`Gained ${xp} XP from study.`,'xp')}
+        else{addNoise(1,'read');if(BOSSES[p.floor])addMsg(`Hint: ${BOSSES[p.floor].name} weakness — vary your tactics!`,'boss');else addMsg("The texts speak of deeper horrors...",'dim')}
     } else if(roomId==='altar'){
-        if(choiceIdx===0){p.hp=Math.max(1,p.hp-20);addMsg("You sacrifice your blood...",'enemy');awardRelic('altar')}
-        else if(choiceIdx===1){if(p.gold>=50){p.gold-=50;const item=cloneItem(pick(CHEST_ITEMS));if(AUTO_USE.has(item.type)){applyItem(item);addMsg(`The altar yields: ${item.name}`,'item')}else{p.inventory.push(item);addMsg(`The altar yields: ${item.name} — added to bag`,'item')}}else addMsg("Not enough gold.",'enemy')}
+        if(choiceIdx===0){addNoise(12,'blood_sacrifice');p.hp=Math.max(1,p.hp-20);addMsg("You sacrifice your blood...",'enemy');awardRelic('altar')}
+        else if(choiceIdx===1){addNoise(6,'altar_offering');if(p.gold>=50){p.gold-=50;const item=cloneItem(pick(CHEST_ITEMS));if(AUTO_USE.has(item.type)){applyItem(item);addMsg(`The altar yields: ${item.name}`,'item')}else{p.inventory.push(item);addMsg(`The altar yields: ${item.name} — added to bag`,'item')}}else addMsg("Not enough gold.",'enemy')}
         else addMsg("You walk away from the darkness.",'dim');
     }
     if(p.isDead())handleDeath();
