@@ -2539,7 +2539,8 @@ function getShopItems(floor) {
 // ========== AUDIO ==========
 const _realAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const _masterGain = _realAudioCtx.createGain();
-_masterGain.gain.value = (typeof _settings!=='undefined'&&typeof _settings.volume==='number')?_settings.volume:0.5;
+// Note: _settings is declared later (TDZ on let). Volume is applied later in applySettings().
+_masterGain.gain.value = 0.5;
 _masterGain.connect(_realAudioCtx.destination);
 function setMasterVolume(v){_masterGain.gain.value=Math.max(0,Math.min(1,v))}
 // Proxy so audioCtx.destination routes through masterGain without touching every beep call
