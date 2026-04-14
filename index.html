@@ -908,9 +908,15 @@ body {
     <p style="color:#5ff; margin-top:15px">40 floors. 8 bosses. 3 lives.</p>
     <p style="color:#f5f">Can you defeat the Forgotten King?</p>
     <div style="margin-top:20px">
-        <button onclick="startNewGame()">New Game</button>
+        <button onclick="tryNewGame()">New Game</button>
         <button id="btn-continue" onclick="loadGame()" style="display:none">Continue</button>
         <button id="btn-sound" onclick="toggleSound()">Sound: ON</button>
+    </div>
+    <div style="margin-top:10px">
+        <button onclick="showSettingsScreen()" style="font-size:11px">Settings</button>
+        <button onclick="showHistoryScreen()" style="font-size:11px">History</button>
+        <button onclick="showAchievementsScreen()" style="font-size:11px">Achievements</button>
+        <button onclick="showTutorial()" style="font-size:11px">How to Play</button>
     </div>
     <p style="color:#555; margin-top:15px; font-size:11px">WASD or Arrow Keys to move | Keyboard shortcuts in-game</p>
 </div>
@@ -1248,6 +1254,12 @@ const TORCHES = [
     {name:"The Everburning Eye",type:"torch",slot:"torch",radius:5,
      desc:"5 tile vision",
      flavor:"It has not blinked in four hundred years. It is waiting for me to blink first."},
+    {name:"Veiled Lantern",type:"torch",slot:"torch",radius:3,stealthVal:3,
+     desc:"3 tile vision, +3 Stealth",
+     flavor:"Its flame is swallowed by black glass. You see by what little light leaks through the cracks."},
+    {name:"Shrouded Wick",type:"torch",slot:"torch",radius:4,stealthVal:2,
+     desc:"4 tile vision, +2 Stealth",
+     flavor:"Smolders without smoke. The dead cannot smell you if you burn them a tribute."},
 ];
 
 function makeStarterTorch(){const t=cloneItem(TORCHES[0]);t.floorsLeft=3;return t}
@@ -1268,6 +1280,8 @@ function rollTorchDrop(floorNum){
     if(floorNum>=10)pool.push(TORCHES[3]); // Skull Lantern
     if(floorNum>=15)pool.push(TORCHES[4]); // Wick of the Martyr
     if(floorNum>=25)pool.push(TORCHES[5]); // Everburning Eye
+    if(floorNum>=6)pool.push(TORCHES[6]); // Veiled Lantern
+    if(floorNum>=12)pool.push(TORCHES[7]); // Shrouded Wick
     const t=cloneItem(pick(pool));
     delete t.floorsLeft;delete t.isStarter;
     return t;
@@ -1361,6 +1375,11 @@ const ITEM_TYPES = [
     {name:"Warding Glyph",type:"buff_defense",value:2,desc:"+2 DEF permanently"},
     {name:"Scroll of Shattered Nerves",type:"scroll",value:15,desc:"Deals 15 damage"},
     {name:"Scroll of Unmaking",type:"scroll",value:40,desc:"Deals 40 damage"},
+    {name:"Whisperstep Boots",type:"armor",value:1,desc:"+1 DEF, +2 Stealth",slot:"feet",armorWeight:'leather',stealthVal:2},
+    {name:"Padded Silk Hood",type:"armor",value:1,desc:"+1 DEF, +1 Stealth",slot:"head",armorWeight:'leather',stealthVal:1},
+    {name:"Silent Dagger",type:"weapon",value:2,desc:"+2 ATK, +2 Stealth",slot:"weapon",stealthVal:2},
+    {name:"Prowler's Cloak",type:"armor",value:2,desc:"+2 DEF, +2 Stealth",slot:"chest",armorWeight:'leather',stealthVal:2},
+    {name:"Ring of Stillness",type:"ring_def",value:1,desc:"+1 DEF, +2 Stealth",slot:"ring",stealthVal:2},
 ];
 
 const CHEST_ITEMS = [
@@ -1976,7 +1995,7 @@ const SPECIAL_ROOM_TYPES = [
     {id:'prison',name:'Prison Cell',char:'P',color:'prison',chance:0.05,desc:'Iron bars hold a shadowy figure.',
      choices:['(dynamic)'],dynamicChoices:true},
     {id:'vault',name:'Vault',char:'V',color:'vault',chance:0.04,desc:'A heavy iron door with intricate locks.',
-     choices:['Use a key to enter','Try to force it open (may trap)']},
+     choices:['(dynamic)'],dynamicChoices:true},
     {id:'lore',name:'Lore Chamber',char:'L',color:'lore',chance:0.06,desc:'Ancient texts line the walls.',
      choices:['Study the texts (XP bonus)','Search for clues (reveal boss hint)']},
     {id:'altar',name:'Cursed Altar',char:'A',color:'altar',chance:0.04,desc:'Dark energy swirls above a blood-stained altar.',
@@ -2097,6 +2116,56 @@ const PRISON_SCENARIOS=[
 ];
 
 function getPrisonScenario(){return pick(PRISON_SCENARIOS)}
+
+// ========== VAULT SCENARIOS ==========
+const VAULT_SCENARIOS=[
+    {id:'iron_door',
+     desc:'A slab of black iron set with seven locks. The metal hums faintly — it is aware of you.',
+     choices:[
+         {text:'Use a key on the primary lock',action:(p)=>{if(p.keys>0){p.keys--;addNoise(8,'vault_key');const g=randInt(60,140);p.gold+=g;addMsg(`The locks cascade open. +${g} gold`,'gold');if(Math.random()<0.35)awardRelic('vault')}else addMsg("No key. The door sneers at you.",'enemy')}},
+         {text:'Pry the hinges with a blade',action:(p)=>{addNoise(20,'pry');if(Math.random()<0.4+p.disarmTrap){const g=randInt(40,90);p.gold+=g;addMsg(`The hinges shriek and give way. +${g} gold`,'gold')}else{const d=randInt(10,22);p.hp-=d;addMsg(`The blade snaps. Shrapnel bites. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Study the lock mechanism',action:(p)=>{addNoise(3,'study');if(Math.random()<0.3+p.disarmTrap*0.5){p.keys++;addMsg("You understand. A spare key forms in your hand.",'hp')}else addMsg("The mechanism defeats you. You learn only your own limits.",'dim')}},
+         {text:'Press your ear to the door',action:(p)=>{addNoise(1,'listen');if(Math.random()<0.5){const g=randInt(15,30);p.gold+=g;addMsg(`Something slides a coin-purse under the door. +${g} gold`,'gold')}else addMsg("Breathing. On the other side. In time with yours.",'enemy')}},
+         {text:'Leave it alone',action:(p)=>{addMsg("Some doors are locked for a reason. You walk on.",'dim')}},
+     ]},
+    {id:'sealed_tomb',
+     desc:'A rune-carved stone slab marked with the sigil of a forgotten king. Wax seals drip down its face — still warm.',
+     choices:[
+         {text:'Break the wax seals',action:(p)=>{addNoise(12,'seals');const g=randInt(50,120);p.gold+=g;addMsg(`Sigils flare and fail. +${g} gold`,'gold');if(Math.random()<0.4){const d=randInt(6,14);p.hp-=d;addMsg(`A curse lashes out. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Speak the king\'s name aloud',action:(p)=>{addNoise(5,'name');if(Math.random()<0.5){awardRelic('vault');addMsg("The stone weeps and cracks. A relic tumbles out.",'hp')}else{applyStatus(p,'weaken',0,3);addMsg("The name tastes of ash. You feel smaller.",'enemy')}}},
+         {text:'Bleed on the sigil',action:(p)=>{p.hp=Math.max(1,p.hp-8);addNoise(2,'blood');const g=randInt(80,160);p.gold+=g;addMsg(`The seal drinks and opens. -8 HP, +${g} gold`,'gold')}},
+         {text:'Carve your own sigil beside it',action:(p)=>{addNoise(6,'carve');p.bonusDefense+=1;p.recalcStats();addMsg("You mark yourself into the stone. DEF +1",'hp')}},
+         {text:'Walk away',action:(p)=>{addMsg("Kings are buried for reasons. You do not disturb this one.",'dim')}},
+     ]},
+    {id:'clockwork_vault',
+     desc:'A brass door wound with gears that tick in uneven time. Each gear bears a different number of teeth. A puzzle.',
+     choices:[
+         {text:'Solve the puzzle patiently',action:(p)=>{addNoise(2,'solve');if(Math.random()<0.4+p.disarmTrap*0.4){const g=randInt(80,180);p.gold+=g;addMsg(`Gears align. The door blooms open. +${g} gold`,'gold');if(Math.random()<0.3)awardRelic('vault')}else{addMsg("The gears reset. Your patience is not enough.",'dim')}}},
+         {text:'Force a gear with your blade',action:(p)=>{addNoise(18,'force_gear');if(Math.random()<0.5){const g=randInt(40,80);p.gold+=g;addMsg(`Something snaps. The door yawns. +${g} gold`,'gold')}else{const d=randInt(12,22);p.hp-=d;addMsg(`Gears whip back. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Listen to the ticking',action:(p)=>{addNoise(1,'listen_tick');const xp=20+p.floor*3;p.gainXp(xp);addMsg(`The rhythm teaches you something. +${xp} XP`,'xp')}},
+         {text:'Steal a single small gear',action:(p)=>{addNoise(4,'steal_gear');if(Math.random()<0.6){const g=randInt(20,40);p.gold+=g;addMsg(`A brass cog. Worth something. +${g} gold`,'gold')}else{applyStatus(p,'bleed',4,3);addMsg("The gear bit you. It wanted to stay.",'enemy')}}},
+         {text:'Leave the mechanism alone',action:(p)=>{addMsg("You walk on. The ticking follows for a few paces.",'dim')}},
+     ]},
+    {id:'living_vault',
+     desc:'The vault door is flesh. It has a mouth. The mouth has teeth. Between the teeth, you see glittering piles.',
+     choices:[
+         {text:'Reach into the mouth',action:(p)=>{addNoise(6,'reach');const d=randInt(5,12);p.hp-=d;const g=randInt(60,140);p.gold+=g;addMsg(`Teeth close on your wrist. You pull free. -${d} HP, +${g} gold`,'gold');flashDamage()}},
+         {text:'Feed it a piece of yourself',action:(p)=>{p.hp=Math.max(1,p.hp-15);p.bonusMaxHp+=10;p.recalcStats();addMsg("It chews thoughtfully. -15 HP, +10 Max HP",'hp');if(Math.random()<0.5)awardRelic('vault')}},
+         {text:'Feed it gold instead',action:(p)=>{if(p.gold>=30){p.gold-=30;addNoise(2,'feed');if(Math.random()<0.6){const g=randInt(60,120);p.gold+=g;addMsg(`It burps coins. Net: +${g-30} gold`,'gold')}else addMsg("It eats your offering and asks for more. No refund.",'enemy')}else addMsg("Not enough gold to offer.",'enemy')}},
+         {text:'Speak kindly to it',action:(p)=>{addNoise(1,'whisper');if(Math.random()<0.3){const g=randInt(30,60);p.gold+=g;addMsg(`It sighs. Treasure trickles out. +${g} gold`,'gold')}else addMsg("It weeps. It has heard kind words before.",'dim')}},
+         {text:'Back away slowly',action:(p)=>{addMsg("You give the door a wide berth. It watches you leave.",'dim')}},
+     ]},
+    {id:'shattered_vault',
+     desc:'The vault door is already broken open — recently. Treasure spills into the hall. Something moves inside.',
+     choices:[
+         {text:'Snatch what you can and flee',action:(p)=>{addNoise(10,'snatch');const g=randInt(40,100);p.gold+=g;addMsg(`Hands full. +${g} gold`,'gold');if(Math.random()<0.4){const d=randInt(6,14);p.hp-=d;addMsg(`Something swipes at your back. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Investigate the noise inside',action:(p)=>{addNoise(4,'investigate');if(Math.random()<0.5){const g=randInt(100,200);p.gold+=g;addMsg(`You find the thief, already dead. +${g} gold`,'gold');if(Math.random()<0.5)awardRelic('vault')}else{const d=randInt(14,28);p.hp-=d;addMsg(`The thief was not dead. -${d} HP`,'enemy');flashDamage()}}},
+         {text:'Set a trap for whoever returns',action:(p)=>{addNoise(3,'trap');p.bonusAttack+=1;p.recalcStats();addMsg("You learn something about patience and wire. ATK +1",'hp')}},
+         {text:'Take only what fell in the hallway',action:(p)=>{addNoise(2,'careful');const g=randInt(20,50);p.gold+=g;addMsg(`A modest haul. +${g} gold`,'gold')}},
+         {text:'Leave it — it\'s a trap',action:(p)=>{addMsg("You trust your gut. It does not disagree with you.",'dim')}},
+     ]},
+];
+function getVaultScenario(){return pick(VAULT_SCENARIOS)}
 
 // ========== CAMPFIRE SCENARIOS ==========
 // Each campfire visit picks a random scenario with unique choices.
@@ -2468,7 +2537,19 @@ function getShopItems(floor) {
 }
 
 // ========== AUDIO ==========
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const _realAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const _masterGain = _realAudioCtx.createGain();
+_masterGain.gain.value = (typeof _settings!=='undefined'&&typeof _settings.volume==='number')?_settings.volume:0.5;
+_masterGain.connect(_realAudioCtx.destination);
+function setMasterVolume(v){_masterGain.gain.value=Math.max(0,Math.min(1,v))}
+// Proxy so audioCtx.destination routes through masterGain without touching every beep call
+const audioCtx = new Proxy(_realAudioCtx,{
+    get(t,prop){
+        if(prop==='destination')return _masterGain;
+        const v=t[prop];
+        return typeof v==='function'?v.bind(t):v;
+    }
+});
 function beep(freq, dur, vol=0.12) {
     if (!soundEnabled) return;
     try {
@@ -3796,7 +3877,7 @@ function rollAffix(item) {
 }
 
 function rollSetItem(floorNum) {
-    if (floorNum < 5 || Math.random() > 0.12) return null; // 12% chance on floor 5+
+    if (floorNum < 5 || Math.random() > 0.25) return null; // 25% chance on floor 5+ (boosted for set viability)
     const set = pick(ITEM_SETS);
     const pieceName = pick(set.pieces);
     // Determine slot from name
@@ -3970,6 +4051,10 @@ function movePlayer(dx,dy){
                 else addMsg(`Your ${tq.name} sputters... (${tq.floorsLeft} floor${tq.floorsLeft===1?'':'s'} left)`,'dim');
             }
         }
+        // Pacifist floor: if no combats this floor, unlock
+        if(game.analytics&&game.analytics._floorStartKills===game.analytics.kills&&p.floor>1)unlockAchievement('pacifist_floor');
+        if(game.analytics)game.analytics._floorStartKills=game.analytics.kills;
+        checkAchievements();
         // Auto-save on floor transition — natural checkpoint
         try{saveGame(true);}catch(e){console.error('Auto-save failed:',e);}
     }
@@ -4625,6 +4710,9 @@ function handleEnemyDefeat(enemy){
         game.analytics.kills++;game.analytics.goldEarned+=gold;
         if(enemy.isElite)game.analytics.eliteKills=(game.analytics.eliteKills||0)+1;
     }
+    // Achievement checks
+    if(p.hp===1)unlockAchievement('close_call');
+    checkAchievements();
 }
 
 function endCombat(resolved){
@@ -5130,6 +5218,20 @@ function triggerSpecialRoom(room){
         document.getElementById('item-screen').style.display='flex';
         return;
     }
+    // Vault: pick a random scenario and build dynamic choices
+    if(srt.id==='vault'){
+        const scenario=getVaultScenario();
+        room._vaultScenario=scenario;
+        displayDesc=scenario.desc;
+        let html=`<button class="overlay-close" onclick="inEvent=false;document.getElementById('item-screen').style.display='none'">X</button>`;
+        html+=`<h2 style="color:#fc0">VAULT</h2><p style="color:#bbb;margin-bottom:12px">${displayDesc}</p>`;
+        scenario.choices.forEach((c,i)=>{
+            html+=`<div><button onclick="handleSpecialChoice('vault',${i})" style="background:#1a1a2e;color:#fc0;border:1px solid #fc0;padding:10px 20px;margin:5px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:5px">${c.text}</button></div>`;
+        });
+        document.getElementById('item-box').innerHTML=html;
+        document.getElementById('item-screen').style.display='flex';
+        return;
+    }
     // Campfire: pick a random scenario and build dynamic choices
     if(srt.id==='campfire'){
         const scenario=getCampfireScenario();
@@ -5191,15 +5293,13 @@ function handleSpecialChoice(roomId,choiceIdx){
             addMsg("The cell stands silent.",'dim');
         }
     } else if(roomId==='vault'){
-        if(choiceIdx===0){
-            if(p.keys>0){p.keys--;const gold=randInt(50,150);p.gold+=gold;addMsg(`Vault opened! +${gold} gold!`,'gold');
-                addNoise(8,'vault_key'); // unlocking is moderately noisy
-                if(Math.random()<0.3)awardRelic('vault');
-            } else addMsg("You don't have a key.",'enemy');
+        // Dynamic vault scenarios
+        const room=game.getCurrentRoom();
+        const scenario=room&&room._vaultScenario;
+        if(scenario&&scenario.choices[choiceIdx]&&scenario.choices[choiceIdx].action){
+            scenario.choices[choiceIdx].action(p);
         } else {
-            addNoise(18,'vault_force'); // forcing a vault door is VERY loud
-            if(Math.random()<p.disarmTrap){const gold=randInt(30,80);p.gold+=gold;addMsg(`Forced open! +${gold} gold`,'gold')}
-            else{const d=randInt(8,20);p.hp-=d;addMsg(`Trap! -${d} HP!`,'enemy');flashDamage()}
+            addMsg("The vault stands silent.",'dim');
         }
     } else if(roomId==='lore'){
         if(choiceIdx===0){addNoise(2,'study');const xp=10+p.floor*3;if(p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}!`,'xp')}else addMsg(`Gained ${xp} XP from study.`,'xp')}
@@ -5519,13 +5619,209 @@ function handleDeath(){
     }
 }
 
+// ========== RUN HISTORY ==========
+function recordRun(p,a,outcome){
+    try{
+        const history=JSON.parse(localStorage.getItem('dotf_history')||'[]');
+        const entry={
+            date:Date.now(),outcome,className:p.className,level:p.level,floor:p.floor,
+            kills:p.kills,bosses:p.bossesKilled,gold:p.gold,relics:p.relics.length,
+            floorsExplored:a.floorsExplored||0,itemsFound:a.itemsFound||0,
+        };
+        history.unshift(entry);
+        if(history.length>50)history.length=50;
+        localStorage.setItem('dotf_history',JSON.stringify(history));
+    }catch(e){console.error('History save failed:',e)}
+}
+function getRunHistory(){try{return JSON.parse(localStorage.getItem('dotf_history')||'[]')}catch(e){return[]}}
+function renderRunHistory(){
+    const hist=getRunHistory();
+    if(!hist.length)return '<p style="color:#888">No runs yet. Begin your descent.</p>';
+    let html='<div style="max-height:300px;overflow-y:auto;text-align:left;font-size:11px">';
+    html+='<table style="width:100%;border-collapse:collapse"><tr style="color:#f93;border-bottom:1px solid #333"><th>Result</th><th>Class</th><th>Lvl</th><th>Floor</th><th>Kills</th><th>Gold</th></tr>';
+    hist.slice(0,20).forEach(r=>{
+        const c=r.outcome==='Victory'?'#5f5':(r.outcome==='Died'?'#f55':'#aaa');
+        html+=`<tr style="color:${c};border-bottom:1px dotted #222"><td>${r.outcome}</td><td>${r.className}</td><td>${r.level}</td><td>${r.floor}</td><td>${r.kills}</td><td>${r.gold}</td></tr>`;
+    });
+    html+='</table></div>';
+    return html;
+}
+function showHistoryScreen(){
+    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    html+=`<h2 style="color:#f93">RUN HISTORY</h2>`;
+    html+=renderRunHistory();
+    document.getElementById('item-box').innerHTML=html;
+    document.getElementById('item-screen').style.display='flex';
+}
+
+// ========== ACHIEVEMENTS ==========
+const ACHIEVEMENTS=[
+    {id:'first_blood',name:'First Blood',desc:'Defeat your first enemy',icon:'⚔'},
+    {id:'first_boss',name:'Regicide',desc:'Defeat a boss',icon:'👑'},
+    {id:'first_floor',name:'Deeper Still',desc:'Reach floor 5',icon:'▼'},
+    {id:'floor_10',name:'Beneath the Bones',desc:'Reach floor 10',icon:'💀'},
+    {id:'floor_20',name:'Into the Abyss',desc:'Reach floor 20',icon:'🕳'},
+    {id:'floor_30',name:'Where Light Dies',desc:'Reach floor 30',icon:'🌑'},
+    {id:'victor',name:'Forgotten No More',desc:'Defeat the Forgotten King',icon:'★'},
+    {id:'hoarder',name:'Hoarder',desc:'Carry 500+ gold at once',icon:'💰'},
+    {id:'collector',name:'Collector',desc:'Hold 10+ relics in one run',icon:'📿'},
+    {id:'set_complete',name:'Ensemble',desc:'Wear a full 3-piece set',icon:'✦'},
+    {id:'stealth_master',name:'Ghost',desc:'Reach 15+ Stealth',icon:'🌫'},
+    {id:'pacifist_floor',name:'Unseen Passage',desc:'Clear a floor without combat',icon:'🕊'},
+    {id:'slaughter',name:'Slaughter',desc:'100+ kills in a single run',icon:'🗡'},
+    {id:'close_call',name:'Close Call',desc:'Win a combat at 1 HP',icon:'❤'},
+    {id:'merchant_friend',name:'Gilded Tongue',desc:'Spend 500+ gold at merchants',icon:'⚖'},
+];
+function getAchievements(){try{return JSON.parse(localStorage.getItem('dotf_achievements')||'{}')}catch(e){return{}}}
+function unlockAchievement(id){
+    const data=getAchievements();
+    if(data[id])return;
+    const ach=ACHIEVEMENTS.find(a=>a.id===id);if(!ach)return;
+    data[id]={unlocked:Date.now()};
+    try{localStorage.setItem('dotf_achievements',JSON.stringify(data))}catch(e){return}
+    showAchievementToast(ach);
+}
+function showAchievementToast(ach){
+    const toast=document.createElement('div');
+    toast.style.cssText='position:fixed;top:20px;right:20px;background:linear-gradient(135deg,#2a2a1a,#1a1a0a);border:2px solid #fc0;color:#fc0;padding:12px 18px;font-family:monospace;font-size:12px;z-index:9999;box-shadow:0 0 20px #fc0;animation:fadeInOut 4s';
+    toast.innerHTML=`<div style="color:#ff5">★ ACHIEVEMENT ★</div><div style="color:#fff;margin-top:4px">${ach.icon} ${ach.name}</div><div style="color:#aaa;font-size:10px">${ach.desc}</div>`;
+    document.body.appendChild(toast);
+    if(typeof sfxSpecialRoom==='function')try{sfxSpecialRoom()}catch(e){}
+    setTimeout(()=>toast.remove(),4000);
+}
+function checkAchievements(){
+    if(!game||!game.player)return;
+    const p=game.player,a=game.analytics||{};
+    if(p.kills>=1)unlockAchievement('first_blood');
+    if(p.bossesKilled>=1)unlockAchievement('first_boss');
+    if(p.floor>=5)unlockAchievement('first_floor');
+    if(p.floor>=10)unlockAchievement('floor_10');
+    if(p.floor>=20)unlockAchievement('floor_20');
+    if(p.floor>=30)unlockAchievement('floor_30');
+    if(game.victory)unlockAchievement('victor');
+    if(p.gold>=500)unlockAchievement('hoarder');
+    if(p.relics&&p.relics.length>=10)unlockAchievement('collector');
+    if(p.stealth>=15)unlockAchievement('stealth_master');
+    if(p.kills>=100)unlockAchievement('slaughter');
+    // Set completion: check if 3 equipped pieces share setId
+    if(p.equipment){
+        const setCounts={};
+        for(const slot in p.equipment){
+            const it=p.equipment[slot];
+            if(it&&it.setId){setCounts[it.setId]=(setCounts[it.setId]||0)+1}
+        }
+        if(Object.values(setCounts).some(c=>c>=3))unlockAchievement('set_complete');
+    }
+    if((a.goldSpent||0)>=500)unlockAchievement('merchant_friend');
+}
+function showAchievementsScreen(){
+    const data=getAchievements();
+    const unlocked=ACHIEVEMENTS.filter(a=>data[a.id]).length;
+    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    html+=`<h2 style="color:#f93">ACHIEVEMENTS (${unlocked}/${ACHIEVEMENTS.length})</h2>`;
+    html+='<div style="max-height:320px;overflow-y:auto;text-align:left">';
+    ACHIEVEMENTS.forEach(a=>{
+        const got=!!data[a.id];
+        const col=got?'#fc0':'#555';
+        html+=`<div style="border:1px solid ${col};padding:6px;margin:4px 0;color:${col};font-size:11px"><b>${a.icon} ${a.name}</b>${got?' ✓':''}<br><span style="color:${got?'#aaa':'#444'}">${a.desc}</span></div>`;
+    });
+    html+='</div>';
+    document.getElementById('item-box').innerHTML=html;
+    document.getElementById('item-screen').style.display='flex';
+}
+
+// ========== CONFIRM DIALOG ==========
+function showConfirm(msg,onYes){
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;font-family:monospace';
+    ov.innerHTML=`<div style="background:#1a0a0a;border:2px solid #f55;padding:24px;max-width:360px;text-align:center;color:#fff;font-size:13px">
+        <p style="margin-bottom:16px">${msg}</p>
+        <button id="cf-yes" style="background:#3a0a0a;color:#f55;border:1px solid #f55;padding:8px 20px;margin:4px;cursor:pointer;font-family:monospace">Yes</button>
+        <button id="cf-no" style="background:#0a1a2a;color:#5ff;border:1px solid #5ff;padding:8px 20px;margin:4px;cursor:pointer;font-family:monospace">No</button>
+    </div>`;
+    document.body.appendChild(ov);
+    document.getElementById('cf-yes').onclick=()=>{ov.remove();onYes()};
+    document.getElementById('cf-no').onclick=()=>ov.remove();
+}
+
+// ========== SETTINGS ==========
+function getSettings(){try{return JSON.parse(localStorage.getItem('dotf_settings')||'{}')}catch(e){return{}}}
+function saveSettings(s){try{localStorage.setItem('dotf_settings',JSON.stringify(s))}catch(e){}}
+let _settings=getSettings();
+if(typeof _settings.volume!=='number')_settings.volume=0.5;
+if(typeof _settings.difficulty!=='string')_settings.difficulty='normal';
+if(typeof _settings.largeText!=='boolean')_settings.largeText=false;
+function applySettings(){
+    if(_settings.largeText)document.body.style.fontSize='15px';else document.body.style.fontSize='';
+    if(typeof setMasterVolume==='function')setMasterVolume(_settings.volume);
+}
+applySettings();
+function showSettingsScreen(){
+    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    html+=`<h2 style="color:#f93">SETTINGS</h2><div style="text-align:left;font-size:12px">`;
+    html+=`<div style="margin:10px 0"><b>Volume:</b> <input type="range" min="0" max="100" value="${Math.round(_settings.volume*100)}" oninput="_settings.volume=this.value/100;saveSettings(_settings);setMasterVolume(_settings.volume);document.getElementById('vol-val').textContent=this.value+'%'"> <span id="vol-val">${Math.round(_settings.volume*100)}%</span></div>`;
+    html+=`<div style="margin:10px 0"><b>Difficulty:</b><br>`;
+    ['easy','normal','hard'].forEach(d=>{
+        const sel=_settings.difficulty===d;
+        html+=`<button onclick="_settings.difficulty='${d}';saveSettings(_settings);showSettingsScreen()" style="background:${sel?'#2a2a4a':'#1a1a2e'};color:${sel?'#5ff':'#aaa'};border:1px solid ${sel?'#5ff':'#555'};padding:6px 14px;margin:3px;cursor:pointer;font-family:monospace;font-size:11px">${d.toUpperCase()}</button>`;
+    });
+    html+=`</div>`;
+    html+=`<div style="margin:10px 0"><label><input type="checkbox" ${_settings.largeText?'checked':''} onchange="_settings.largeText=this.checked;saveSettings(_settings);applySettings()"> Larger text (accessibility)</label></div>`;
+    html+=`<div style="margin:14px 0"><button onclick="showHistoryScreen()" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:6px 14px;margin:3px;cursor:pointer;font-family:monospace;font-size:11px">Run History</button>`;
+    html+=`<button onclick="showAchievementsScreen()" style="background:#1a1a2e;color:#fc0;border:1px solid #fc0;padding:6px 14px;margin:3px;cursor:pointer;font-family:monospace;font-size:11px">Achievements</button></div>`;
+    html+=`<p style="color:#555;font-size:10px">Difficulty: easy=+20% HP/gold, hard=-20% HP, more enemies. Takes effect on new runs.</p>`;
+    html+=`</div>`;
+    document.getElementById('item-box').innerHTML=html;
+    document.getElementById('item-screen').style.display='flex';
+}
+
+// ========== TUTORIAL ==========
+function showTutorial(){
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10000;display:flex;align-items:center;justify-content:center;font-family:monospace;padding:20px';
+    ov.innerHTML=`<div style="background:#0a0a1a;border:2px solid #5ff;padding:22px;max-width:460px;color:#ddd;font-size:12px;max-height:90vh;overflow-y:auto">
+        <h2 style="color:#f93;margin-top:0">WELCOME TO THE DEPTHS</h2>
+        <p style="color:#aaa">40 floors. 8 bosses. 3 lives. You have one purpose: kill the Forgotten King.</p>
+        <h3 style="color:#5ff;font-size:13px">CONTROLS</h3>
+        <ul style="color:#ccc;line-height:1.5">
+            <li><b>WASD</b> or <b>Arrows</b> — Move (or swipe on mobile)</li>
+            <li><b>I</b> — Inventory | <b>E</b> — Equipment</li>
+            <li><b>L</b> — Look | <b>F</b> — Search | <b>G</b> — Grab hidden</li>
+            <li><b>P</b> — Save | <b>R</b> — Rest / Relics | <b>?</b> — Legend</li>
+        </ul>
+        <h3 style="color:#5ff;font-size:13px">KEY MECHANICS</h3>
+        <ul style="color:#ccc;line-height:1.5">
+            <li><b>NOISE</b> — High noise draws enemies and triggers ambushes. Low noise lets you avoid fights.</li>
+            <li><b>STEALTH</b> — Reduces noise generated. Rogue/Ranger excel at it.</li>
+            <li><b>SPECIAL ROOMS</b> — Shrines, campfires, prisons, vaults. Each offers choices with real consequences.</li>
+            <li><b>RELICS</b> — Permanent upgrades. Pick carefully.</li>
+            <li><b>AUTO-SAVE</b> — Saves on each floor and when you close the tab.</li>
+        </ul>
+        <h3 style="color:#5ff;font-size:13px">TIP</h3>
+        <p style="color:#ccc">Tap <b>?</b> at any time to see the legend. Press <b>R</b> at a campfire to rest (full heal, no cost).</p>
+        <div style="text-align:center;margin-top:16px">
+            <button onclick="this.parentElement.parentElement.parentElement.remove();try{localStorage.setItem('dotf_tutorial_seen','1')}catch(e){}" style="background:#1a1a2e;color:#5ff;border:1px solid #5ff;padding:10px 24px;cursor:pointer;font-family:monospace">Descend</button>
+        </div>
+    </div>`;
+    document.body.appendChild(ov);
+}
+function maybeShowTutorial(){
+    try{if(localStorage.getItem('dotf_tutorial_seen')==='1')return}catch(e){}
+    showTutorial();
+}
+
 function checkEndState(){
     if(game.victory){
         stopAmbient();sfxVictory();deleteSave();
+        checkAchievements();
+        recordRun(game.player,game.analytics||{},'Victory');
         playEpilogue(game.player, game.analytics||{});
     }
     if(game.player.lives<0){
-        stopAmbient();sfxDeath();setTimeout(()=>{
+        stopAmbient();sfxDeath();
+        checkAchievements();
+        recordRun(game.player,game.analytics||{},'Died');
+        setTimeout(()=>{
             deleteSave();const p=game.player,a=game.analytics||{};
             document.getElementById('end-box').innerHTML=`
                 <h1 style="color:#f55">GAME OVER</h1>
@@ -5749,10 +6045,14 @@ function initClassSelect(){
 function selectClass(idx){
     const cls=CHARACTER_CLASSES[idx];
     game=new GameState(cls);
+    // Apply difficulty modifiers
+    if(_settings.difficulty==='easy'){game.player.maxHp=Math.floor(game.player.maxHp*1.2);game.player.hp=game.player.maxHp;game.player.gold+=30}
+    else if(_settings.difficulty==='hard'){game.player.maxHp=Math.floor(game.player.maxHp*0.8);game.player.hp=game.player.maxHp}
     deleteSave();
     document.getElementById('class-screen').style.display='none';
     document.getElementById('game-container').style.display='block';
     messages=[];
+    maybeShowTutorial();
     addMsg(`You are the ${cls.name}, descending into the dungeon...`,'xp');
     addMsg("Find the stairs (>) to go deeper!",'dim');
     if(BOSSES[game.player.floor])addMsg(`⚠ ${BOSSES[game.player.floor].name} lurks on this floor...`,'boss');
@@ -5764,6 +6064,13 @@ function startNewGame(){
     document.getElementById('menu-screen').style.display='none';
     document.getElementById('class-screen').style.display='flex';
     initClassSelect();
+}
+function tryNewGame(){
+    if(hasSave()){
+        showConfirm("A save exists. Starting a new game will erase it. Continue?",()=>{deleteSave();startNewGame()});
+    } else {
+        startNewGame();
+    }
 }
 
 function toggleSound(){
