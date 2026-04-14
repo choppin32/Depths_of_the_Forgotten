@@ -3970,6 +3970,8 @@ function movePlayer(dx,dy){
                 else addMsg(`Your ${tq.name} sputters... (${tq.floorsLeft} floor${tq.floorsLeft===1?'':'s'} left)`,'dim');
             }
         }
+        // Auto-save on floor transition — natural checkpoint
+        try{saveGame(true);}catch(e){console.error('Auto-save failed:',e);}
     }
     renderAll();
     checkEndState();
@@ -5612,9 +5614,8 @@ function playEpilogue(p, a){
 }
 
 // ========== SAVE/LOAD ==========
-function saveGame(){
-    if(!game)return;
-    // Suspend-save: full state serialization
+function _buildSaveData(){
+    if(!game)return null;
     const serializeRooms=game.rooms.map(r=>({
         x:r.x,y:r.y,w:r.w,h:r.h,cx:r.cx,cy:r.cy,desc:r.desc,visited:r.visited,
         isBossRoom:r.isBossRoom,hasShop:r.hasShop,shopX:r.shopX,shopY:r.shopY,
@@ -5623,7 +5624,7 @@ function saveGame(){
         enemies:r.enemies.map(e=>({...e})),
         items:r.items,chests:r.chests,hiddenItems:r.hiddenItems,
     }));
-    const data={
+    return {
         version:'1.1',
         className:game.player.className,
         classIdx:CHARACTER_CLASSES.findIndex(c=>c.name===game.player.className),
@@ -5649,11 +5650,25 @@ function saveGame(){
         chestlessFloors:game.chestlessFloors||0,
         restedRooms:[...(game.restedRooms||[])],
     };
-    localStorage.setItem('dotf_save',JSON.stringify(data));
-    sfxSave();addMsg("Game saved!",'hp');renderAll();
+}
+function saveGame(silent){
+    if(!game)return;
+    const data=_buildSaveData();
+    if(!data)return;
+    try{
+        localStorage.setItem('dotf_save',JSON.stringify(data));
+    }catch(e){
+        console.error('Save failed:',e);
+        if(!silent)addMsg("Save failed — storage full?",'dmg');
+        return;
+    }
+    if(!silent){sfxSave();addMsg("Game saved!",'hp');renderAll();}
+    showContinueButton();
 }
 function loadGame(){
-    const raw=localStorage.getItem('dotf_save');if(!raw)return;
+    let raw;
+    try{raw=localStorage.getItem('dotf_save');}catch(e){console.error('Load failed:',e);return;}
+    if(!raw)return;
     const data=JSON.parse(raw);
     const cls=CHARACTER_CLASSES[data.classIdx];
     game=new GameState(cls,true);
@@ -5712,8 +5727,12 @@ function loadGame(){
     updateAmbientForFloor(game.player.floor);
     renderAll();
 }
-function deleteSave(){localStorage.removeItem('dotf_save')}
-function hasSave(){return localStorage.getItem('dotf_save')!==null}
+function deleteSave(){try{localStorage.removeItem('dotf_save')}catch(e){}}
+function hasSave(){try{return localStorage.getItem('dotf_save')!==null}catch(e){return false}}
+function showContinueButton(){
+    const btn=document.getElementById('btn-continue');
+    if(btn&&hasSave())btn.style.display='inline-block';
+}
 
 // ========== INIT ==========
 function initClassSelect(){
@@ -5788,8 +5807,13 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='?')openLegend();
 });
 
-// Check for save on load
-if(hasSave())document.getElementById('btn-continue').style.display='inline-block';
+// Check for save on load — multiple triggers for robustness
+showContinueButton();
+document.addEventListener('DOMContentLoaded',showContinueButton);
+window.addEventListener('load',showContinueButton);
+
+// Auto-save when leaving page (closing tab, navigating away, refreshing)
+window.addEventListener('beforeunload',()=>{if(game&&!game.victory)saveGame(true);});
 
 // ========== SWIPE SUPPORT ==========
 let touchStartX=0,touchStartY=0,touchStartTime=0;
