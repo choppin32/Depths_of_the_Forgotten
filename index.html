@@ -1924,10 +1924,54 @@ const EVENT_CHOICES = [
     {text:'Offer your own blood',action:(p)=>{const d=randInt(5,10);p.hp-=d;const r=Math.random();if(r<0.33){p.bonusAttack+=3;p.recalcStats();addMsg(`The circle glows. Power surges. -${d} HP, ATK +3`,'hp')}else if(r<0.66){p.bonusDefense+=3;p.recalcStats();addMsg(`The circle dims. Protection wraps you. -${d} HP, DEF +3`,'hp')}else{const h=Math.floor(p.maxHp*0.5);p.hp=Math.min(p.maxHp,p.hp+h);addMsg(`The circle heals. -${d} HP sacrifice, +${h} HP returned.`,'hp')};flashDamage()}},
 ];
 
+// Keyword-based scene classification. Multiple categories per scene.
+function classifyScene(scene){
+    const t=(scene.title+' '+scene.desc).toLowerCase();
+    return {
+        liquid:/blood|water|fluid|pool|fountain|rain|drip|weep|tear|vomit|puddle|ichor|\bwet\b|basin|drown|fluid|ooze/.test(t),
+        body:/corpse|dead|body|bodies|skeleton|adventurer|\bbone|flayed|hang(ed|ing)\b|drowned|stitched|cocoon|\bhands?\b|tooth|teeth|finger|tongue|flesh|skin|\bface\b|\beye|intestin|marrow|jaw|gut|spine|rib|skull|veins|tendon|sinew|organ(?!\s)/.test(t),
+        object:/journal|book|doll|toy|mirror|clock|paint|photo|box|crown|jar|cage|noose|marionette|crib|bowl|loom|invitation|altar|throne|organ plays|pendulum|sack|candle|lantern|drawing|note|tapestry|web|needle|\bring\b|shoe|chair|tomb|gravestone|hook|confessional|bassinet|fruit|mushroom|silk|fungus|crown|pillow|pillar|cross|crucifix|bottle|container|vessel|tapestry|coin|gold|gem|tools?\b|bundle|rope|table|feast|banquet|crib|bed|puppet|statue|pedestal|mask|armor|scythe|dagger|blade|sword/.test(t),
+        writing:/writ(ing|ten)|scratch|carved|\bword|letter|symbol|sigil|rune|\bname|apology|warning|rhyme|inscription|nursery|drawing|\bmap\b|photograph|note|journal|tally|page|diary|book|sign\b|text/.test(t),
+        creature:/\bthing\b|creature|figure|shadow|\bworm|insect|swarm|scarecrow|parasite|doppelganger|\bmother\b|giant|witness|collector|plague doctor|toymaker|taxidermist|marionette|watcher|waving|breath(e|ing|es)|blink|turns to|looks at|watches|follow|crawl(s|ing|ed)|moves|moving|rocks itself|swing|writhes|pulses|beat(s|ing)?\b|alive|living|whispers|whispering|laugh(s|ter|ing)|counting|voice|sing(s|ing)|hum(s|ming)|chew|scratching from|reach(es|ing)|protrude|waving|twitch|tilt/.test(t),
+        sound:/whisper|voice|laugh|counting|song|music|hum|sing|chant|scream|knock|cry|wail|rhyme|chewing|scratching|breath|ticking|clock/.test(t),
+        ambient:/room|hall|corridor|chamber|ceiling|floor|wall|air|silence|darkness|light|warm|cold|echo|stair/.test(t)
+    };
+}
+
+// Choice patterns restricted to certain scene categories.
+// If a scene doesn't have the required category, the choice is filtered out.
+const _CHOICE_RESTRICTIONS = [
+    // Creature-required: interactions with a responsive/living thing
+    {re:/^(Let it taste you|Let it possess you|Let it crawl|Press the crawling things|Let the small things carry|Challenge it|Wrestle it|Dare it to hurt|Bind it to your will|Sing to it|Dance with it|Name it|Bow to it|Mirror its posture|Ask it a question|Apologize to it|Trade faces with it|Bite it back|Squeeze it until|Plant a kiss|See through it somehow|Play its game|Whisper back|Laugh at it|Weep with it|Gather what weeps|Make a deal|Mark it and move on|Commune with it)/i, need:'creature'},
+    // Liquid-required: drinking/tasting liquids
+    {re:/^(Drink deeply from whatever pools|Drink from it|Drink what seeps|Taste what coats|Anoint yourself with the fluid|Lick the|Inject it into your veins)/i, need:'liquid'},
+    // Object-required: cracking/opening/pressing physical containers
+    {re:/^(Crack it open for valuables|Open the sealed container|Pry it open|Swallow the pill|Stick your hand in|Reach inside carefully|Reach into the opening|Unwrap the cloth bundle|Pry whatever)/i, need:'object'},
+    // Writing-required: reading inscribed things
+    {re:/^(Read what's written|Read the inscription|Read the protective marks|Trace the sigils|Decipher the symbols|Open the forbidden book)/i, need:'writing'},
+    // Body-required: interacting with corpses/remains
+    {re:/^(Check its pockets|Search deeper within|Peel free what glints|Pry loose what was set|Shape a weapon from what remains|Make a weapon from the bones|Take a piece as a trophy|Take the small hard pieces|Drape what's here over yourself|Consume what's inside|Knot the dangling strands|Barter with the dead|Scrape the dried blood|Absorb its dying memories|Gouge out|Collect its tears|Pull it from the ribcage|Peel the coins|Melt the fillings|Tie a knot in the intestines|Wear its skin|Wear it\b)/i, need:'body'},
+    // Ambient-required: big spatial/structural things (jumping into pits etc.)
+    {re:/^(Jump into the pit|Seal the room behind you|Build a barrier from what's broken)/i, need:'ambient'},
+];
+
+function choiceAllowed(choice, cats){
+    for(const r of _CHOICE_RESTRICTIONS){
+        if(r.re.test(choice.text)){
+            if(!cats[r.need]) return false;
+        }
+    }
+    return true;
+}
+
 function rollFloorEvent(){
     const scene=pick(EVENT_SCENES);
-    // Pick 3 unique random choices
-    const pool=[...EVENT_CHOICES];
+    const cats=classifyScene(scene);
+    // Filter pool to only thematically-appropriate choices
+    let pool=EVENT_CHOICES.filter(c=>choiceAllowed(c,cats));
+    // Safety fallback — should never hit, but if filter is too strict, fall back to full pool
+    if(pool.length<3) pool=[...EVENT_CHOICES];
+    else pool=[...pool];
     const chosen=[];
     for(let i=0;i<3&&pool.length;i++){
         const idx=randInt(0,pool.length-1);
