@@ -940,6 +940,7 @@ body {
     </div>
     <div style="margin-top:10px">
         <button onclick="showHallScreen()" style="font-size:11px;color:#f9f;border-color:#f9f">Hall of Echoes</button>
+        <button onclick="showCodexScreen()" style="font-size:11px;color:#fc0;border-color:#fc0">Codex</button>
         <button onclick="showSettingsScreen()" style="font-size:11px">Settings</button>
         <button onclick="showHistoryScreen()" style="font-size:11px">History</button>
         <button onclick="showAchievementsScreen()" style="font-size:11px">Achievements</button>
@@ -1588,6 +1589,62 @@ const ENEMY_TRAITS = [
     {id:'bewildering',name:'Bewildering',desc:'20% chance to Confuse on hit',color:'#f9f'},
     {id:'charged',name:'Charged',desc:'20% chance to Shock on hit',color:'#ff4'},
 ];
+
+// ========== V2 LORE FRAGMENTS (CODEX) ==========
+// Persistent lore the player collects from Lore Chambers across runs.
+const LORE_FRAGMENTS = [
+    {id:'f1',title:'Torn Journal Page I',text:'"The King told us the depths were sealed. He lied. I have heard the singing from beneath the flagstones of my own cell."'},
+    {id:'f2',title:'Torn Journal Page II',text:'"Day forty. The walls sweat. My torch burned blue, then green, then went out. I have not seen another living soul in a week, and yet I am never alone."'},
+    {id:'f3',title:'Torn Journal Page III',text:'"I found the others. What was left of them. Their mouths were full of black stones. They were smiling."'},
+    {id:'f4',title:'A Priest\'s Confession',text:'"We did not lose the gods down here. We found new ones. Older ones. I wish we had kept losing."'},
+    {id:'f5',title:'A Warden\'s Oath',text:'"The prisoners are not prisoners. They are offerings. I understood too late. The chains go only one way."'},
+    {id:'f6',title:'Fragment of a Map',text:'"...past the weeping stair, past the room of hands, past where the water runs up. There is a door. Do not open it. Do not—"'},
+    {id:'f7',title:'The Alchemist\'s Recipe',text:'"Tears of the condemned. Bone ash from a thing that never breathed. A whisper, caught in wax. Mix until it screams back."'},
+    {id:'f8',title:'Child\'s Drawing',text:'A crude figure with too many arms stands over a smaller figure. Underneath, in a child\'s shaky hand: "mother says he is good to us."'},
+    {id:'f9',title:'A Song, Half-Remembered',text:'"Down, down, down we go / where the red roots of the mountain grow / the King is hungry, the King is cold / the King is older than we are told."'},
+    {id:'f10',title:'The Cartographer\'s Last Entry',text:'"Every map I draw of this place is wrong by morning. The halls move. I am starting to think they are not halls at all. I am starting to think they are throats."'},
+    {id:'f11',title:'Soldier\'s Farewell',text:'"If you find this, I am already part of the dark. Do not look for me in the faces down here. I am in all of them now."'},
+    {id:'f12',title:'A Merchant\'s Ledger',text:'"Bought: one soul, slightly used. Sold: one soul, thoroughly used. Profit margin: excellent. Customer retention: total."'},
+    {id:'f13',title:'The First Descent',text:'"We were supposed to be heroes. Twelve of us came down. I am writing this by the light of our last torch. There are eleven sets of eyes watching me write."'},
+    {id:'f14',title:'A Wizard\'s Lament',text:'"Magic does not work here the way it should. The spells land. The targets die. But something answers each casting, somewhere deeper, and it is learning my name."'},
+    {id:'f15',title:'Engraving on a Door',text:'"THIS SIDE FOR THE LIVING." The door has been forced open from the other side.'},
+    {id:'f16',title:'A Knight\'s Prayer',text:'"Forgive me that I drew steel in Your holy halls. Forgive me that I drew it on something wearing Your face."'},
+    {id:'f17',title:'Recipe for Descent',text:'"Eat nothing offered. Drink nothing offered. Love nothing offered. Especially that last one."'},
+    {id:'f18',title:'Fragment of the King\'s Decree',text:'"...and so the Forgotten shall remain forgotten, on pain of forgetting. Any who speak the old names shall be unmade, name first."'},
+    {id:'f19',title:'A Miner\'s Note',text:'"We kept digging. We should have stopped. The gold we pulled out was warm. Warm like a body. Warm like something was still inside it."'},
+    {id:'f20',title:'Final Fragment',text:'"If you have read all the others, then you are close. Close to what, I cannot tell you. That part of me is already down there. That part of me is already you."'},
+];
+function getCodex(){try{const d=localStorage.getItem('dotf_codex');return d?JSON.parse(d):{}}catch(e){return {}}}
+function saveCodex(c){try{localStorage.setItem('dotf_codex',JSON.stringify(c))}catch(e){}}
+function unlockFragment(){
+    const codex=getCodex();
+    const pool=LORE_FRAGMENTS.filter(f=>!codex[f.id]);
+    if(!pool.length)return null;
+    const frag=pool[randInt(0,pool.length-1)];
+    codex[frag.id]=Date.now();
+    saveCodex(codex);
+    return frag;
+}
+function showCodexScreen(){
+    const codex=getCodex();
+    const found=LORE_FRAGMENTS.filter(f=>codex[f.id]).length;
+    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    html+=`<h2 style="color:#fc0">CODEX OF FRAGMENTS (${found}/${LORE_FRAGMENTS.length})</h2>`;
+    html+=`<div style="color:#888;font-size:11px;margin-bottom:10px;font-style:italic">Pages recovered from the depths. They persist, even when you do not.</div>`;
+    html+='<div style="max-height:360px;overflow-y:auto;text-align:left">';
+    for(const f of LORE_FRAGMENTS){
+        const got=!!codex[f.id];
+        const col=got?'#fc0':'#444';
+        html+=`<div style="border:1px solid ${col};padding:8px;margin:5px 0;color:${col};font-size:11px;border-radius:3px">`;
+        html+=`<b>${got?f.title:'??? — Undiscovered'}</b><br>`;
+        html+=`<span style="color:${got?'#ccc':'#333'};font-style:italic">${got?f.text:'This fragment has not yet been recovered.'}</span>`;
+        html+=`</div>`;
+    }
+    html+='</div>';
+    html+=`<div style="margin-top:10px;font-size:10px;color:#555">Visit Lore Chambers in the dungeon to recover fragments.</div>`;
+    document.getElementById('item-box').innerHTML=html;
+    document.getElementById('item-screen').style.display='flex';
+}
 
 // ========== V1.1 ENEMY ROLES ==========
 const ENEMY_ROLES = {
@@ -5455,6 +5512,9 @@ function handleEnemyDefeat(enemy){
         game.grid[enemy.y][enemy.x]='>';addMsg("Stairs appear!",'stairs');
         // Boss relic reward
         awardRelic('boss');
+        // Boss always drops a Codex fragment
+        const frag=unlockFragment();
+        if(frag)addMsg(`📜 Codex fragment recovered: "${frag.title}"`,'item');
     }
     let gold=randInt(1,5+p.floor*2);if(enemy.isBoss)gold*=5;
     if(hasRelic('lucky_coin'))gold=Math.floor(gold*1.15);
@@ -6097,7 +6157,16 @@ function handleSpecialChoice(roomId,choiceIdx){
             addMsg("The vault stands silent.",'dim');
         }
     } else if(roomId==='lore'){
-        if(choiceIdx===0){addNoise(2,'study');const xp=10+p.floor*3;if(p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}!`,'xp')}else addMsg(`Gained ${xp} XP from study.`,'xp')}
+        if(choiceIdx===0){
+            addNoise(2,'study');
+            const xp=10+p.floor*3;
+            if(p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}!`,'xp')}else addMsg(`Gained ${xp} XP from study.`,'xp');
+            // Chance to unlock a permanent Codex fragment
+            if(Math.random()<0.7){
+                const frag=unlockFragment();
+                if(frag){addMsg(`📜 Codex fragment recovered: "${frag.title}"`,'item');if(typeof sfxItem==='function')try{sfxItem()}catch(e){}}
+            }
+        }
         else{addNoise(1,'read');if(BOSSES[p.floor])addMsg(`Hint: ${BOSSES[p.floor].name} weakness — vary your tactics!`,'boss');else addMsg("The texts speak of deeper horrors...",'dim')}
     } else if(roomId==='altar'){
         if(choiceIdx===0){addNoise(12,'blood_sacrifice');p.hp=Math.max(1,p.hp-20);addMsg("You sacrifice your blood...",'enemy');awardRelic('altar')}
