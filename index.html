@@ -508,6 +508,32 @@ body {
 }
 #combat-actions button:active { background: #444; }
 
+/* Floating damage/heal numbers */
+#combat-box { overflow: visible; }
+.float-num {
+    position: absolute;
+    pointer-events: none;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 22px;
+    text-shadow: 0 0 4px #000, 1px 1px 0 #000;
+    animation: floatUp 1100ms ease-out forwards;
+    z-index: 95;
+    user-select: none;
+    white-space: nowrap;
+}
+.float-num.dmg  { color: #f55; }
+.float-num.heal { color: #5f5; }
+.float-num.crit { color: #fc0; font-size: 28px; }
+.float-num.block{ color: #9cf; font-size: 18px; }
+.float-num.miss { color: #888; font-size: 18px; }
+@keyframes floatUp {
+    0%   { opacity: 0; transform: translate(-50%, 0) scale(0.7); }
+    15%  { opacity: 1; transform: translate(-50%, -8px) scale(1.1); }
+    30%  { transform: translate(-50%, -14px) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -60px) scale(0.9); }
+}
+
 /* Shop overlay */
 #shop-screen {
     display: none;
@@ -913,6 +939,7 @@ body {
         <button id="btn-sound" onclick="toggleSound()">Sound: ON</button>
     </div>
     <div style="margin-top:10px">
+        <button onclick="showHallScreen()" style="font-size:11px;color:#f9f;border-color:#f9f">Hall of Echoes</button>
         <button onclick="showSettingsScreen()" style="font-size:11px">Settings</button>
         <button onclick="showHistoryScreen()" style="font-size:11px">History</button>
         <button onclick="showAchievementsScreen()" style="font-size:11px">Achievements</button>
@@ -3383,6 +3410,28 @@ function flashDamage(){
     setTimeout(()=>el.classList.remove('active'),200);
 }
 
+// Floating damage / heal numbers in the combat overlay
+// side: 'player' (bottom-left area) | 'enemy' (top-right/middle area)
+// type: 'dmg' | 'heal' | 'crit' | 'block' | 'miss'
+function spawnFloatNum(text, type, side){
+    const box=document.getElementById('combat-box');
+    if(!box||box.offsetParent===null)return; // only while combat visible
+    const el=document.createElement('div');
+    el.className='float-num '+(type||'dmg');
+    el.textContent=text;
+    // Horizontal: enemy side = 30% from left, player side = 70%
+    const leftPct = side==='enemy' ? 30 : 70;
+    el.style.left = leftPct + '%';
+    // Vertical: enemy numbers rise from upper quarter, player from lower quarter
+    const topPct = side==='enemy' ? 22 : 62;
+    el.style.top = topPct + '%';
+    // Small random jitter so stacked hits don't overlap exactly
+    el.style.marginLeft = (randInt(-18,18)) + 'px';
+    el.style.marginTop = (randInt(-6,6)) + 'px';
+    box.appendChild(el);
+    setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 1200);
+}
+
 function flashGold(){
     const el=document.getElementById('gold-flash');
     if(!el)return;
@@ -4077,6 +4126,8 @@ class Player {
         else if(si.type==='buff_attack'){this.bonusAttack+=si.value;this.recalcStats()}
         else if(si.type==='buff_defense'){this.bonusDefense+=si.value;this.recalcStats()}
         else this.inventory.push(si);
+        // Apply meta-progression upgrades from Hall of Echoes
+        try{ if(typeof applyStartingUpgrades==='function') applyStartingUpgrades(this); }catch(e){console.error('Upgrade apply failed:',e)}
     }
     recalcStats(){
         let eqAtk=0,eqDef=0,eqHp=0;
@@ -4408,6 +4459,8 @@ function tickStatuses(target, phase, combatLogArr) {
         if (def.tickDmg && def.phase === phase) {
             const dmg = s.potency;
             target.hp -= dmg;
+            const isPlayer = (target === game.player);
+            spawnFloatNum('-'+dmg, 'dmg', isPlayer?'player':'enemy');
             if (combatLogArr) combatLogArr.push({ text: `${def.icon} ${s.name} deals ${dmg} to ${target.name || 'you'}!`, cls: 'enemy' });
         }
         // Regen
@@ -4415,6 +4468,8 @@ function tickStatuses(target, phase, combatLogArr) {
             const heal = s.potency;
             if (target.maxHp) target.hp = Math.min(target.maxHp, target.hp + heal);
             else target.hp += heal;
+            const isPlayer = (target === game.player);
+            spawnFloatNum('+'+heal, 'heal', isPlayer?'player':'enemy');
             if (combatLogArr) combatLogArr.push({ text: `${def.icon} Regen heals ${heal}!`, cls: 'hp' });
         }
         // Decrement duration
@@ -4949,14 +5004,15 @@ function combatAction(action){
     if(action==='attack'){
         let atk=getEffectiveAttack(p);
         let dmg=Math.max(1,atk+randInt(-1,3));
+        let isCrit=false;
         // Trinket: crit chance
         const critBonus=getTrinketPassive('crit_chance');
-        if(critBonus>0&&Math.random()<critBonus){dmg=Math.floor(dmg*1.5);combatLog.push({text:"CRITICAL HIT!",cls:'boss'})}
+        if(critBonus>0&&Math.random()<critBonus){dmg=Math.floor(dmg*1.5);isCrit=true;combatLog.push({text:"CRITICAL HIT!",cls:'boss'})}
         if(p.cls.ability==='backstab'&&p.backstabReady&&!p.backstabUsedLastRound){
             let mult=2;
             if(e.traits&&e.traits.some(t=>t.id==='watcher'))mult=1.5;
             if(hasRelic('shadow_fang'))mult+=0.15;
-            dmg=Math.floor(dmg*mult);combatLog.push({text:"BACKSTAB! Critical!",cls:'boss'});p.backstabReady=false;
+            dmg=Math.floor(dmg*mult);isCrit=true;combatLog.push({text:"BACKSTAB! Critical!",cls:'boss'});p.backstabReady=false;
             if(hasRelic('shadow_fang'))applyStatus(e,'bleed',3,3);
         }
         p.backstabUsedLastRound=false;
@@ -4970,7 +5026,7 @@ function combatAction(action){
         if(e.isBoss&&e.mechanic&&e.mechanic.id==='royal_decree'&&!p.bossPhaseVulnerable){dmg=0;combatLog.push({text:"The King is immune!",cls:'boss'})}
         // Apply damage
         dmg=absorbBarrier(e,dmg);
-        e.hp-=dmg;sfxHit();combatLog.push({text:`You hit ${e.name} for ${dmg} damage!`,cls:'item'});
+        e.hp-=dmg;sfxHit();spawnFloatNum('-'+dmg,isCrit?'crit':'dmg','enemy');combatLog.push({text:`You hit ${e.name} for ${dmg} damage!`,cls:'item'});
         // Relic: Venom Gland
         if(hasRelic('venom_gland')&&Math.random()<0.15)applyStatus(e,'poison',3,3);
         // Relic: Frost Shard
@@ -5057,7 +5113,7 @@ function enemyAttack(e, p) {
     }
     // Trinket: dodge chance
     const dodgeVal=getTrinketPassive('dodge_chance');
-    if(dodgeVal>0&&Math.random()<dodgeVal){combatLog.push({text:"You dodge the attack!",cls:'xp'});return}
+    if(dodgeVal>0&&Math.random()<dodgeVal){spawnFloatNum('DODGE','miss','player');combatLog.push({text:"You dodge the attack!",cls:'xp'});return}
     let eatk = getEffectiveAttack(e);
     let d = Math.max(1, eatk + randInt(0, 4) - p.defense);
     if (p.blockTurns > 0) d = Math.floor(d / 2);
@@ -5068,12 +5124,13 @@ function enemyAttack(e, p) {
     if (hasStatus(p, 'curse') && e.isBoss) d = Math.floor(d * 1.1);
     d = absorbBarrier(p, d);
     p.hp -= d; sfxPlayerHit(); flashDamage(); screenShake(e.isBoss||d>=15);
+    spawnFloatNum('-'+d, p.blockTurns>0?'block':'dmg', 'player');
     combatLog.push({ text: `${e.name} hits you for ${d} damage!`, cls: 'enemy' });
     // Trinket: thorns
     const thornsVal=getTrinketPassive('thorns');
-    if(thornsVal>0){e.hp-=thornsVal;combatLog.push({text:`Trinket reflects ${thornsVal} damage!`,cls:'item'})}
+    if(thornsVal>0){e.hp-=thornsVal;spawnFloatNum('-'+thornsVal,'dmg','enemy');combatLog.push({text:`Trinket reflects ${thornsVal} damage!`,cls:'item'})}
     // Thorn Mantle relic
-    if (hasRelic('thorn_mantle')) { e.hp -= 3; combatLog.push({ text: "Thorn Mantle reflects 3!", cls: 'item' }); }
+    if (hasRelic('thorn_mantle')) { e.hp -= 3; spawnFloatNum('-3','dmg','enemy'); combatLog.push({ text: "Thorn Mantle reflects 3!", cls: 'item' }); }
     // Venomous trait
     if (e.traits && e.traits.some(t => t.id === 'venomous') && Math.random() < 0.3) applyStatus(p, 'poison', 3, 3);
     // Chilling trait
@@ -5131,7 +5188,7 @@ function useAbility(enemy){
         let d=Math.max(1,p.attack*2+randInt(0,4));
         if(getSetBonusLevel('shadow')>=2)d=Math.floor(d*1.15);
         if(enemy.traits&&enemy.traits.some(t=>t.id==='watcher'))d=Math.floor(d*0.75);
-        enemy.hp-=d;sfxHit();combatLog.push({text:`BACKSTAB! ${d} damage!`,cls:'boss'});
+        enemy.hp-=d;sfxHit();spawnFloatNum('-'+d,'crit','enemy');combatLog.push({text:`BACKSTAB! ${d} damage!`,cls:'boss'});
         p.backstabReady=false;p.backstabUsedLastRound=true;
         if(hasRelic('shadow_fang'))applyStatus(enemy,'bleed',3,3);
         return true;
@@ -5140,7 +5197,7 @@ function useAbility(enemy){
         let d=15+p.level*2;
         if(game.currentMutator&&game.currentMutator.effects.abilityMult)d=Math.floor(d*game.currentMutator.effects.abilityMult);
         if(hasRelic('arcane_ash'))d=Math.floor(d*1.5);
-        enemy.hp-=d;sfxHit();combatLog.push({text:`FIREBALL! ${d} damage!`,cls:'enemy'});
+        enemy.hp-=d;sfxHit();spawnFloatNum('-'+d,'crit','enemy');combatLog.push({text:`FIREBALL! ${d} damage!`,cls:'enemy'});
         if(Math.random()<0.25)applyStatus(enemy,'burn',3,3);
         return true;
     }
@@ -5153,6 +5210,7 @@ function useAbility(enemy){
         let healAmt=15+p.level*2;
         healAmt=Math.floor(healAmt*getHealMultiplier());
         const old=p.hp;p.hp=Math.min(p.maxHp,p.hp+healAmt);
+        spawnFloatNum('+'+(p.hp-old),'heal','player');
         combatLog.push({text:`Divine Heal! +${p.hp-old} HP`,cls:'hp'});
         if(hasRelic('saints_ember'))applyStatus(p,'barrier',5,2);
         return true;
@@ -5341,7 +5399,7 @@ function handleEnemyDefeat(enemy){
     combatLog.push({text:`${enemy.name} defeated!`,cls:'hp'});
     p.kills++;
     // Soul Siphon relic
-    if(hasRelic('soul_siphon')){p.hp=Math.min(p.maxHp,p.hp+3);combatLog.push({text:"Soul Siphon heals 3 HP!",cls:'hp'})}
+    if(hasRelic('soul_siphon')){p.hp=Math.min(p.maxHp,p.hp+3);spawnFloatNum('+3','heal','player');combatLog.push({text:"Soul Siphon heals 3 HP!",cls:'hp'})}
     // Trinket: heal on kill
     const hokVal=getTrinketPassive('heal_on_kill');
     if(hokVal>0){p.hp=Math.min(p.maxHp,p.hp+hokVal);combatLog.push({text:`Trinket heals ${hokVal} HP!`,cls:'hp'})}
@@ -6433,6 +6491,93 @@ function showAchievementsScreen(){
     document.getElementById('item-screen').style.display='flex';
 }
 
+// ========== META-PROGRESSION / SOUL SHARDS ==========
+// Persistent currency earned on run end. Spent on permanent upgrades in Hall of Echoes.
+const SHARD_UPGRADES = [
+    {id:'max_hp',  name:'Echo of Vitality',   desc:'+2 starting Max HP per level', maxLv:10, cost:lv=>50+lv*30, apply:(p,lv)=>{p.bonusMaxHp+=lv*2; p.maxHp+=lv*2; p.hp+=lv*2;}},
+    {id:'atk',     name:'Echo of Wrath',      desc:'+1 starting ATK per level',    maxLv:5,  cost:lv=>80+lv*50, apply:(p,lv)=>{p.bonusAttack+=lv;}},
+    {id:'def',     name:'Echo of Stone',      desc:'+1 starting DEF per level',    maxLv:5,  cost:lv=>80+lv*50, apply:(p,lv)=>{p.bonusDefense+=lv;}},
+    {id:'gold',    name:'Echo of Greed',      desc:'+15 starting gold per level',  maxLv:8,  cost:lv=>40+lv*20, apply:(p,lv)=>{p.gold+=lv*15;}},
+    {id:'potion',  name:'Echo of Mercy',      desc:'Start each run with a Healing Potion per level', maxLv:3, cost:lv=>100+lv*60, apply:(p,lv)=>{for(let i=0;i<lv;i++){const pot=ITEM_TYPES.find(it=>it.name==='Healing Potion');if(pot)p.inventory.push(cloneItem(pot));}}},
+    {id:'torch',   name:'Echo of Light',      desc:'+1 torch fuel per level at run start', maxLv:5, cost:lv=>60+lv*30, apply:(p,lv)=>{if(p.equipment&&p.equipment.torch)p.equipment.torch.turnsLeft=(p.equipment.torch.turnsLeft||20)+lv;}},
+    {id:'stealth', name:'Echo of Shadow',     desc:'+1 starting Stealth per level', maxLv:5, cost:lv=>70+lv*40, apply:(p,lv)=>{p.bonusStealth+=lv;}},
+    {id:'xp',      name:'Echo of Wisdom',     desc:'Start each run at level 1 with +25 XP per level', maxLv:4, cost:lv=>90+lv*50, apply:(p,lv)=>{p.gainXp(lv*25);}},
+];
+function getShards(){try{return parseInt(localStorage.getItem('dotf_shards')||'0',10)||0}catch(e){return 0}}
+function addShards(n){try{const cur=getShards();const nw=cur+n;localStorage.setItem('dotf_shards',String(nw));return nw}catch(e){return getShards()}}
+function spendShards(n){const cur=getShards();if(cur<n)return false;try{localStorage.setItem('dotf_shards',String(cur-n));return true}catch(e){return false}}
+function getUpgrades(){try{return JSON.parse(localStorage.getItem('dotf_upgrades')||'{}')}catch(e){return{}}}
+function setUpgradeLevel(id,lv){try{const d=getUpgrades();d[id]=lv;localStorage.setItem('dotf_upgrades',JSON.stringify(d))}catch(e){}}
+function applyStartingUpgrades(p){
+    const d=getUpgrades();
+    for(const u of SHARD_UPGRADES){
+        const lv=d[u.id]||0;
+        if(lv>0) u.apply(p,lv);
+    }
+    if(p.recalcStats) p.recalcStats();
+    if(p.hp>p.maxHp) p.hp=p.maxHp;
+}
+// Award shards at run end. Call from death handler + victory.
+function awardRunShards(p,victory){
+    if(!p)return 0;
+    const floors=(p.floor||1)-1;
+    const bosses=p.bossesKilled||0;
+    const kills=p.kills||0;
+    let total = floors*5 + bosses*15 + Math.floor(kills*0.4);
+    if(victory) total += 100;
+    if(total<5) total=5; // pity minimum
+    addShards(total);
+    showShardToast(total,victory);
+    return total;
+}
+function showShardToast(n,victory){
+    const toast=document.createElement('div');
+    toast.style.cssText='position:fixed;top:80px;right:20px;background:linear-gradient(135deg,#2a1a3a,#1a0a2e);border:2px solid #f9f;color:#f9f;padding:12px 18px;font-family:monospace;font-size:12px;z-index:9999;box-shadow:0 0 20px #f9f;animation:fadeInOut 5s';
+    toast.innerHTML=`<div style="color:#fbf">◆ SOUL SHARDS ◆</div><div style="color:#fff;margin-top:4px;font-size:16px">+${n} shards</div><div style="color:#aaa;font-size:10px">${victory?'Victory bonus included.':'Carried from the depths.'}</div>`;
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(),5000);
+}
+function showHallScreen(){
+    const shards=getShards();
+    const owned=getUpgrades();
+    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    html+=`<h2 style="color:#f9f">HALL OF ECHOES</h2>`;
+    html+=`<div style="color:#aaa;font-size:11px;margin-bottom:10px">The dungeon remembers you. Each run leaves an echo.</div>`;
+    html+=`<div style="color:#f9f;font-size:14px;margin-bottom:12px">◆ ${shards} Soul Shards</div>`;
+    html+='<div style="max-height:340px;overflow-y:auto;text-align:left">';
+    for(const u of SHARD_UPGRADES){
+        const lv=owned[u.id]||0;
+        const maxed=lv>=u.maxLv;
+        const cost=maxed?0:u.cost(lv);
+        const canBuy=!maxed&&shards>=cost;
+        const col=maxed?'#5f5':(canBuy?'#f9f':'#555');
+        html+=`<div style="border:1px solid ${col};padding:8px;margin:5px 0;color:${col};font-size:11px;border-radius:3px">`;
+        html+=`<div style="display:flex;justify-content:space-between;align-items:center">`;
+        html+=`<div><b>${u.name}</b> <span style="color:#888">[Lv ${lv}/${u.maxLv}]</span><br><span style="color:${maxed?'#8f8':'#aaa'};font-size:10px">${u.desc}</span></div>`;
+        if(maxed){
+            html+=`<div style="color:#5f5">MAX</div>`;
+        } else {
+            html+=`<button onclick="buyUpgrade('${u.id}')" ${canBuy?'':'disabled'} style="background:${canBuy?'#3a1a4a':'#222'};color:${canBuy?'#f9f':'#555'};border:1px solid ${canBuy?'#f9f':'#555'};padding:4px 10px;cursor:${canBuy?'pointer':'not-allowed'};font-family:monospace;font-size:11px;border-radius:3px">◆${cost}</button>`;
+        }
+        html+=`</div></div>`;
+    }
+    html+='</div>';
+    html+=`<div style="margin-top:10px;font-size:10px;color:#555">Shards earned: +5 per floor cleared, +15 per boss, +0.4 per kill, +100 on victory.</div>`;
+    document.getElementById('item-box').innerHTML=html;
+    document.getElementById('item-screen').style.display='flex';
+}
+function buyUpgrade(id){
+    const u=SHARD_UPGRADES.find(x=>x.id===id);if(!u)return;
+    const owned=getUpgrades();
+    const lv=owned[id]||0;
+    if(lv>=u.maxLv)return;
+    const cost=u.cost(lv);
+    if(!spendShards(cost))return;
+    setUpgradeLevel(id,lv+1);
+    if(typeof sfxSave==='function')try{sfxSave()}catch(e){}
+    showHallScreen();
+}
+
 // ========== CONFIRM DIALOG ==========
 function showConfirm(msg,onYes){
     const ov=document.createElement('div');
@@ -6518,12 +6663,14 @@ function checkEndState(){
         stopAmbient();sfxVictory();deleteSave();
         checkAchievements();
         recordRun(game.player,game.analytics||{},'Victory');
+        if(!game._shardsAwarded){game._shardsAwarded=true;awardRunShards(game.player,true)}
         playEpilogue(game.player, game.analytics||{});
     }
     if(game.player.lives<0){
         stopAmbient();sfxDeath();
         checkAchievements();
         recordRun(game.player,game.analytics||{},'Died');
+        if(!game._shardsAwarded){game._shardsAwarded=true;awardRunShards(game.player,false)}
         setTimeout(()=>{
             deleteSave();const p=game.player,a=game.analytics||{};
             document.getElementById('end-box').innerHTML=`
