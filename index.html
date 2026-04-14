@@ -1565,6 +1565,9 @@ const STATUS_EFFECTS = {
     curse:{id:'curse',name:'Curse',color:'#a0a',icon:'💀',stackable:false,healReduce:0.1,bossDmgMult:1.1},
     buff_atk:{id:'buff_atk',name:'ATK Buff',color:'#f93',icon:'⚔',stackable:false},
     lifesteal:{id:'lifesteal',name:'Lifesteal',color:'#f5f',icon:'🧛',stackable:false},
+    freeze:{id:'freeze',name:'Freeze',color:'#6df',icon:'❄',stackable:false,atkMult:0.6},
+    confusion:{id:'confusion',name:'Confused',color:'#f9f',icon:'💫',stackable:false},
+    shock:{id:'shock',name:'Shock',color:'#ff4',icon:'⚡',stackable:false,defMult:0.75},
 };
 
 // ========== V1.1 ENEMY TRAITS ==========
@@ -1581,6 +1584,9 @@ const ENEMY_TRAITS = [
     {id:'enraged',name:'Enraged',desc:'+3 ATK when below 30% HP',color:'#f55'},
     {id:'chilling',name:'Chilling',desc:'15% chance to Stun for 1 turn',color:'#5ff'},
     {id:'shadowy',name:'Shadowy',desc:'20% chance to dodge attacks',color:'#a0a'},
+    {id:'frostbound',name:'Frostbound',desc:'20% chance to Freeze on hit',color:'#6df'},
+    {id:'bewildering',name:'Bewildering',desc:'20% chance to Confuse on hit',color:'#f9f'},
+    {id:'charged',name:'Charged',desc:'20% chance to Shock on hit',color:'#ff4'},
 ];
 
 // ========== V1.1 ENEMY ROLES ==========
@@ -4501,6 +4507,8 @@ function getEffectiveAttack(entity) {
     if (entity.traits && entity.hp <= entity.maxHp * 0.5) {
         if (entity.traits.some(t => t.id === 'savage')) atk = Math.floor(atk * 1.2);
     }
+    // Freeze reduces ATK
+    if (hasStatus(entity, 'freeze')) atk = Math.max(1, Math.floor(atk * 0.6));
     return atk;
 }
 
@@ -4938,7 +4946,7 @@ function renderCombat(){
         <div style="width:100%;height:12px;background:#333;border-radius:3px;margin-top:5px">
             <div style="width:${hpPct}%;height:100%;background:${e.isBoss?'#f5f':e.isElite?'#f93':'#f55'};border-radius:3px;transition:width 0.2s"></div>
         </div>
-        ${e.intent?`<div style="color:#fc0;font-size:11px;margin-top:4px;font-style:italic">⚠ ${e.intent}</div>`:''}
+        ${e.intent?`<div style="color:#fc0;font-size:11px;margin-top:4px;font-style:italic">⚠ ${e.intent}${(()=>{const eatk=getEffectiveAttack(e);let ed=p.defense;if(hasStatus(p,'shock'))ed=Math.floor(ed*0.75);const lo=Math.max(1,eatk+0-ed),hi=Math.max(1,eatk+4-ed);return ` <span style="color:#f77">(~${lo}-${hi} dmg)</span>`})()}</div>`:''}
         ${playerStatusHtml?`<div style="margin-top:4px;font-size:11px">You: ${playerStatusHtml}</div>`:''}`;
     document.getElementById('combat-log').innerHTML=combatLog.slice(-6).map(m=>`<div class="${m.cls?m.cls+'-color':''}">${m.text}</div>`).join('');
 
@@ -4979,6 +4987,26 @@ function combatAction(action){
         combatLog.push({text:"You are stunned!",cls:'enemy'});
         removeStatus(p,'stun');
         // Enemy still attacks
+        enemyAttack(e,p);
+        if(p.isDead()){sfxDeath();combatLog.push({text:"You have been slain!",cls:'enemy'});endCombat(true);return}
+        tickStatuses(p,'end',combatLog);tickStatuses(e,'end',combatLog);
+        rollEnemyIntent(e);renderCombat();return;
+    }
+
+    // Freeze check: 40% chance to skip the action outright
+    if(hasStatus(p,'freeze')&&Math.random()<0.40){
+        combatLog.push({text:"You are frozen solid — your limbs won't move!",cls:'enemy'});
+        spawnFloatNum('FROZEN','miss','player');
+        enemyAttack(e,p);
+        if(p.isDead()){sfxDeath();combatLog.push({text:"You have been slain!",cls:'enemy'});endCombat(true);return}
+        tickStatuses(p,'end',combatLog);tickStatuses(e,'end',combatLog);
+        rollEnemyIntent(e);renderCombat();return;
+    }
+
+    // Confusion: 30% chance to fumble an attack or ability
+    if(hasStatus(p,'confusion')&&(action==='attack'||action==='ability')&&Math.random()<0.30){
+        combatLog.push({text:"You swing wildly and miss!",cls:'enemy'});
+        spawnFloatNum('FUMBLE','miss','enemy');
         enemyAttack(e,p);
         if(p.isDead()){sfxDeath();combatLog.push({text:"You have been slain!",cls:'enemy'});endCombat(true);return}
         tickStatuses(p,'end',combatLog);tickStatuses(e,'end',combatLog);
@@ -5115,7 +5143,9 @@ function enemyAttack(e, p) {
     const dodgeVal=getTrinketPassive('dodge_chance');
     if(dodgeVal>0&&Math.random()<dodgeVal){spawnFloatNum('DODGE','miss','player');combatLog.push({text:"You dodge the attack!",cls:'xp'});return}
     let eatk = getEffectiveAttack(e);
-    let d = Math.max(1, eatk + randInt(0, 4) - p.defense);
+    let effDef = p.defense;
+    if (hasStatus(p, 'shock')) effDef = Math.floor(effDef * 0.75);
+    let d = Math.max(1, eatk + randInt(0, 4) - effDef);
     if (p.blockTurns > 0) d = Math.floor(d / 2);
     if (p.rageTurns > 0) d = Math.floor(d * 1.5);
     // Crown of Thorns relic
@@ -5137,6 +5167,10 @@ function enemyAttack(e, p) {
     if (e.traits && e.traits.some(t => t.id === 'chilling') && Math.random() < 0.15) applyStatus(p, 'stun', 0, 1);
     // Draining trait
     if (e.traits && e.traits.some(t => t.id === 'draining')) { e.hp = Math.min(e.maxHp, e.hp + 2); }
+    // Frostbound / Bewildering / Charged traits
+    if (e.traits && e.traits.some(t => t.id === 'frostbound') && Math.random() < 0.20) { applyStatus(p, 'freeze', 0, 2); combatLog.push({text:"You are frozen!",cls:'enemy'}); }
+    if (e.traits && e.traits.some(t => t.id === 'bewildering') && Math.random() < 0.20) { applyStatus(p, 'confusion', 0, 3); combatLog.push({text:"Your mind clouds over!",cls:'enemy'}); }
+    if (e.traits && e.traits.some(t => t.id === 'charged') && Math.random() < 0.20) { applyStatus(p, 'shock', 0, 2); combatLog.push({text:"Shock courses through you!",cls:'enemy'}); }
 }
 
 function processBossMechanic(e, p, action) {
