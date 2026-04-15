@@ -3446,9 +3446,45 @@ const _realAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const _masterGain = _realAudioCtx.createGain();
 // Note: _settings is declared later (TDZ on let). Volume is applied later in applySettings().
 _masterGain.gain.value = 0.5;
-_masterGain.connect(_realAudioCtx.destination);
+// Compressor on master to keep peaks (music + multiple SFX firing at once) from
+// summing into distortion / "bleeding" together.
+const _masterComp = _realAudioCtx.createDynamicsCompressor();
+_masterComp.threshold.value = -14;
+_masterComp.knee.value = 12;
+_masterComp.ratio.value = 4;
+_masterComp.attack.value = 0.005;
+_masterComp.release.value = 0.12;
+_masterGain.connect(_masterComp);
+_masterComp.connect(_realAudioCtx.destination);
+// Separate music and SFX buses so they don't interfere with each other.
+const _musicBaseVol = 0.55;
+const _musicGain = _realAudioCtx.createGain();
+_musicGain.gain.value = _musicBaseVol;
+_musicGain.connect(_masterGain);
+const _sfxGain = _realAudioCtx.createGain();
+_sfxGain.gain.value = 0.9;
+_sfxGain.connect(_masterGain);
 function setMasterVolume(v){_masterGain.gain.value=Math.max(0,Math.min(1,v))}
-// Proxy so audioCtx.destination routes through masterGain without touching every beep call
+function setMusicVolume(v){_musicGain.gain.value=Math.max(0,Math.min(1,v))*_musicBaseVol}
+function setSfxVolume(v){_sfxGain.gain.value=Math.max(0,Math.min(1,v))*0.9}
+// Duck the music briefly whenever a noisy SFX fires, so combat doesn't bleed
+// into the track — the music drops, the SFX pops, then music fades back up.
+function _duckMusic(intensity,holdMs){
+    try{
+        intensity = Math.max(0, Math.min(1, intensity || 0.55));
+        holdMs = holdMs || 140;
+        const now = _realAudioCtx.currentTime;
+        const base = _musicGain.gain.value;
+        const dipped = base * (1 - intensity);
+        _musicGain.gain.cancelScheduledValues(now);
+        _musicGain.gain.setValueAtTime(base, now);
+        _musicGain.gain.linearRampToValueAtTime(dipped, now + 0.015);
+        _musicGain.gain.setValueAtTime(dipped, now + holdMs/1000);
+        _musicGain.gain.linearRampToValueAtTime(_musicBaseVol, now + holdMs/1000 + 0.18);
+    }catch(e){}
+}
+// Proxy: legacy default destination is the master gain; beep/eventTone/chipNote
+// now target explicit buses (_sfxGain / _musicGain).
 const audioCtx = new Proxy(_realAudioCtx,{
     get(t,prop){
         if(prop==='destination')return _masterGain;
@@ -3461,11 +3497,13 @@ function beep(freq, dur, vol=0.12) {
     try {
         const o = audioCtx.createOscillator();
         const g = audioCtx.createGain();
-        o.connect(g); g.connect(audioCtx.destination);
+        o.connect(g); g.connect(_sfxGain);
         o.frequency.value = freq; o.type = 'square';
         g.gain.value = vol;
         g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur/1000);
         o.start(); o.stop(audioCtx.currentTime + dur/1000);
+        // Duck music for anything louder than footsteps
+        if (vol >= 0.08) _duckMusic(Math.min(0.65, vol*3.5), Math.max(80, dur));
     } catch(e) {}
 }
 function sfxStep(){beep(200,30,0.02)} function sfxHit(){beep(400,80)} function sfxPlayerHit(){beep(150,120)}
@@ -3490,11 +3528,12 @@ function eventTone(freq,dur,vol,type='triangle'){
         const o=audioCtx.createOscillator();
         const g=audioCtx.createGain();
         o.type=type;o.frequency.value=freq;
-        o.connect(g);g.connect(audioCtx.destination);
+        o.connect(g);g.connect(_sfxGain);
         g.gain.setValueAtTime(vol,audioCtx.currentTime);
         g.gain.setValueAtTime(vol,audioCtx.currentTime+dur*0.6/1000);
         g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+dur/1000);
         o.start();o.stop(audioCtx.currentTime+dur/1000);
+        _duckMusic(0.7, Math.max(120, dur));
     }catch(e){}
 }
 
@@ -3847,7 +3886,7 @@ function chipNote(freq,dur,type,vol,startTime){
         const o=audioCtx.createOscillator();
         const g=audioCtx.createGain();
         o.type=type;o.frequency.value=freq;
-        o.connect(g);g.connect(audioCtx.destination);
+        o.connect(g);g.connect(_musicGain);
         // Envelope: quick attack, sustain, release
         g.gain.setValueAtTime(0,startTime);
         g.gain.linearRampToValueAtTime(vol,startTime+0.01);
