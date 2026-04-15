@@ -1350,7 +1350,7 @@ const TRINKETS = [
 
 const CHARACTER_CLASSES = [
     {name:"Knight",hp:40,attack:5,defense:3,stealth:2,ability:"block",abilityName:"Shield Block",abilityDesc:"Halves incoming damage for 2 turns",abilityUses:-1,startingItem:{name:"Steel Shield",type:"armor",value:1,desc:"+1 DEF",slot:"offhand"},detectHidden:0.1,disarmTrap:0.2,desc:"Tanky defender. Beginner-friendly."},
-    {name:"Rogue",hp:25,attack:7,defense:1,stealth:8,ability:"backstab",abilityName:"Backstab",abilityDesc:"2x damage — once per combat (sneak attack)",abilityUses:-1,startingItem:{name:"Lockpick Set",type:"key",value:1,desc:"Opens locked chests"},detectHidden:0.25,disarmTrap:0.6,desc:"High risk, high reward. Finds secrets."},
+    {name:"Rogue",hp:25,attack:7,defense:1,stealth:8,ability:"backstab",abilityName:"Backstab",abilityDesc:"2x damage if you sneak up (low noise). Stay quiet!",abilityUses:-1,startingItem:{name:"Lockpick Set",type:"key",value:1,desc:"Opens locked chests"},detectHidden:0.25,disarmTrap:0.6,desc:"High risk, high reward. Finds secrets."},
     {name:"Mage",hp:20,attack:4,defense:1,stealth:4,ability:"fireball",abilityName:"Fireball",abilityDesc:"Deals 15+ damage (3 uses/floor)",abilityUses:3,startingItem:{name:"Scroll of Fire",type:"scroll",value:20,desc:"Deals 20 damage"},detectHidden:0.15,disarmTrap:0.1,desc:"Glass cannon. Devastating magic."},
     {name:"Ranger",hp:28,attack:6,defense:2,stealth:6,ability:"scout",abilityName:"Scout",abilityDesc:"Reveals hidden items & trap types",abilityUses:-1,startingItem:{name:"Hunter's Bow",type:"weapon",value:1,desc:"+1 ATK",slot:"weapon"},detectHidden:0.5,disarmTrap:0.35,desc:"Balanced. Best at finding secrets."},
     {name:"Cleric",hp:30,attack:4,defense:2,stealth:3,ability:"heal",abilityName:"Divine Heal",abilityDesc:"Restore 15+ HP (3 uses/floor)",abilityUses:3,startingItem:{name:"Holy Symbol",type:"buff_defense",value:1,desc:"+1 DEF"},detectHidden:0.15,disarmTrap:0.2,desc:"Sustain healer for long runs."},
@@ -4418,7 +4418,7 @@ class Player {
         if(leveled){this.recalcStats();this.hp=Math.min(this.maxHp,this.hp+Math.floor(this.maxHp*0.4));} // level up heals 40%, not full
         return leveled;
     }
-    resetFloorAbilities(){if(this.abilityMaxUses>0)this.abilityUsesLeft=this.abilityMaxUses;this.backstabReady=true}
+    resetFloorAbilities(){if(this.abilityMaxUses>0)this.abilityUsesLeft=this.abilityMaxUses;/* backstabReady is now set per-combat based on stealth */}
 }
 
 class GameState {
@@ -5133,7 +5133,8 @@ function startCombat(enemy,room){
     if(enemy.isBoss){sfxBossFanfare();showEventBanner(`⚔ ${enemy.name.toUpperCase()}`,'danger');_musicTimeout(startCombatMusic,1800)}
     else if(enemy.isElite){sfxCombatStart();showEventBanner('★ ELITE ENCOUNTER','danger');_musicTimeout(startCombatMusic,600)}
     else{sfxCombatStart();showEventBanner('☠ AMBUSH!','danger');_musicTimeout(startCombatMusic,400)}
-    game.player.backstabReady=true;
+    // Backstab is stealth-gated — determined AFTER ambush/surprise checks below
+    game.player.backstabReady=false;
     game.player.backstabUsedLastRound=false;
     game.player.defendCount=0;
     game.player.lastActions=[];
@@ -5202,6 +5203,23 @@ function startCombat(enemy,room){
         combatLog.push({text:pick(NOISE_MSGS_SURPRISE),cls:'xp'});
         combatLog.push({text:`You strike first for ${d} damage!`,cls:'xp'});
         sfxSurpriseAttack();
+    }
+    // Backstab: stealth-gated — Rogue must actually sneak up on the enemy
+    if(game.player.cls.ability==='backstab'){
+        const p=game.player;
+        const stealthThreshold = 50 + p.stealth * 2; // Rogue (STL 8) = 66
+        if(noiseAmbushed){
+            // They heard you — no backstab
+            combatLog.push({text:"Too loud — the enemy saw you coming. No backstab.",cls:'dim'});
+        } else if(p.noise >= stealthThreshold){
+            // Noise too high to sneak
+            combatLog.push({text:`Your noise (${p.noise}) betrays you. Move quieter to backstab.`,cls:'dim'});
+        } else {
+            // You got the jump!
+            p.backstabReady=true;
+            const quality = p.noise < 15 ? 'perfectly' : p.noise < 30 ? 'silently' : 'quietly';
+            combatLog.push({text:`You approach ${quality} — Backstab ready!`,cls:'xp'});
+        }
     }
     rollEnemyIntent(enemy);
     renderCombat();
