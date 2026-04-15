@@ -941,6 +941,7 @@ body {
     <div style="margin-top:10px">
         <button onclick="showHallScreen()" style="font-size:11px;color:#f9f;border-color:#f9f">Hall of Echoes</button>
         <button onclick="showCodexScreen()" style="font-size:11px;color:#fc0;border-color:#fc0">Codex</button>
+        <button onclick="showChallengeScreen()" style="font-size:11px;color:#5ff;border-color:#5ff">Challenge</button>
         <button onclick="showSettingsScreen()" style="font-size:11px">Settings</button>
         <button onclick="showHistoryScreen()" style="font-size:11px">History</button>
         <button onclick="showAchievementsScreen()" style="font-size:11px">Achievements</button>
@@ -988,6 +989,7 @@ body {
         </div>
     </div>
     <div id="messages"></div>
+    <canvas id="minimap" width="150" height="75" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.75);border:1px solid #555;image-rendering:pixelated;z-index:80;display:none"></canvas>
     <div id="controls">
         <div id="landscape-hud">
             <div class="lh-row"><span class="hp-color" id="lh-class"></span> LVL <span id="lh-level"></span></div>
@@ -1625,6 +1627,117 @@ function unlockFragment(){
     saveCodex(codex);
     return frag;
 }
+// ========== V2 PHASE 4: SEEDED RNG + CHALLENGES ==========
+const _origMathRandom = Math.random.bind(Math);
+function mulberry32(seed){
+    let s = seed >>> 0;
+    return function(){
+        s = (s + 0x6D2B79F5) >>> 0;
+        let t = s;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+function enableSeededRng(seed){Math.random = mulberry32(seed)}
+function disableSeededRng(){Math.random = _origMathRandom}
+function todaysSeedStr(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function seedFromString(str){
+    let h = 2166136261 >>> 0;
+    for(let i=0;i<str.length;i++){h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0}
+    return h >>> 0;
+}
+
+// Pending run configuration consumed by selectClass()
+let _pendingSeed = null;       // number or null
+let _pendingSeedLabel = null;  // "Daily YYYY-MM-DD" or null
+let _pendingChallenges = null; // Set of challenge ids or null
+
+const CHALLENGE_MODIFIERS = [
+    {id:'ironman',  name:'Ironman',    icon:'⚒', desc:'No resting, no shrine healing.', shardMult:1.25},
+    {id:'pacifist', name:'Pacifist',   icon:'☮', desc:'No XP from kills. Events & levels only.', shardMult:1.5},
+    {id:'fragile',  name:'Fragile',    icon:'🫧', desc:'Max HP is 1. Everything one-shots you.', shardMult:3.0},
+    {id:'cursed',   name:'Cursed',     icon:'💀', desc:'Start the run with a random curse effect.', shardMult:1.3},
+    {id:'blindfolded',name:'Blindfolded',icon:'🙈',desc:'Enemy intent and predicted damage hidden.', shardMult:1.2},
+];
+function hasChallenge(id){return game && game.challenges && game.challenges.has(id)}
+function totalChallengeMult(){
+    if(!game||!game.challenges)return 1;
+    let m=1;
+    for(const c of CHALLENGE_MODIFIERS){if(game.challenges.has(c.id))m*=c.shardMult}
+    return m;
+}
+
+// ---- Daily leaderboard (local only) ----
+function getDailyScores(){try{const d=localStorage.getItem('dotf_daily_scores');return d?JSON.parse(d):{}}catch(e){return {}}}
+function saveDailyScores(s){try{localStorage.setItem('dotf_daily_scores',JSON.stringify(s))}catch(e){}}
+function recordDailyScore(seedLabel, p, victory){
+    if(!seedLabel)return;
+    const all=getDailyScores();
+    const entry={floor:p.floor,gold:p.gold,kills:p.kills,bosses:p.bossesKilled,victory:!!victory,date:Date.now()};
+    const best=all[seedLabel];
+    // Keep best: victory beats non-victory, then higher floor, then more gold
+    const isBetter = !best ||
+        (entry.victory && !best.victory) ||
+        (entry.victory===best.victory && entry.floor > best.floor) ||
+        (entry.victory===best.victory && entry.floor===best.floor && entry.gold > best.gold);
+    if(isBetter){all[seedLabel]=entry;saveDailyScores(all)}
+}
+
+// ---- Challenge / Daily selection UI ----
+let _selectedChallenges = new Set();
+function showChallengeScreen(){
+    let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
+    html+=`<h2 style="color:#5ff">CHALLENGE RUN</h2>`;
+    html+=`<div style="color:#888;font-size:11px;margin-bottom:10px;font-style:italic">Stack modifiers for more Soul Shards. Your pain, their power.</div>`;
+    for(const c of CHALLENGE_MODIFIERS){
+        const on=_selectedChallenges.has(c.id);
+        const col=on?'#5ff':'#555';
+        html+=`<div onclick="toggleChallenge('${c.id}')" style="border:1px solid ${col};padding:8px;margin:5px 0;color:${col};font-size:11px;border-radius:3px;cursor:pointer;text-align:left">`;
+        html+=`<div style="display:flex;justify-content:space-between;align-items:center">`;
+        html+=`<div><b>${c.icon} ${c.name}</b> <span style="color:#f9f">x${c.shardMult.toFixed(2)} shards</span><br><span style="color:${on?'#aaf':'#666'}">${c.desc}</span></div>`;
+        html+=`<div style="color:${on?'#5ff':'#333'};font-size:18px">${on?'☑':'☐'}</div>`;
+        html+=`</div></div>`;
+    }
+    let mult=1;for(const id of _selectedChallenges){const c=CHALLENGE_MODIFIERS.find(x=>x.id===id);if(c)mult*=c.shardMult}
+    html+=`<div style="margin-top:10px;color:#f9f;font-size:13px">Total Shard Multiplier: x${mult.toFixed(2)}</div>`;
+    html+=`<div style="margin-top:12px">`;
+    html+=`<button onclick="startChallengeRun(false)" style="color:#5ff;border-color:#5ff">Start Challenge Run</button> `;
+    html+=`<button onclick="startChallengeRun(true)" style="color:#fc0;border-color:#fc0">Daily Seed (${todaysSeedStr()})</button>`;
+    html+=`</div>`;
+    const scores=getDailyScores();
+    const todayKey=`Daily ${todaysSeedStr()}`;
+    if(scores[todayKey]){
+        const s=scores[todayKey];
+        html+=`<div style="margin-top:8px;color:#aaa;font-size:10px">Best today: Floor ${s.floor} • ${s.gold}g • ${s.kills} kills${s.victory?' • VICTORY':''}</div>`;
+    }
+    document.getElementById('item-box').innerHTML=html;
+    document.getElementById('item-screen').style.display='flex';
+}
+function toggleChallenge(id){
+    if(_selectedChallenges.has(id))_selectedChallenges.delete(id);
+    else _selectedChallenges.add(id);
+    showChallengeScreen();
+}
+function startChallengeRun(daily){
+    _pendingChallenges = new Set(_selectedChallenges);
+    if(daily){
+        const label=todaysSeedStr();
+        _pendingSeed = seedFromString(label);
+        _pendingSeedLabel = `Daily ${label}`;
+    } else {
+        _pendingSeed = null;
+        _pendingSeedLabel = null;
+    }
+    document.getElementById('item-screen').style.display='none';
+    // Start a new game
+    if(typeof tryNewGame==='function')tryNewGame();
+    else startNewGame();
+}
+
 function showCodexScreen(){
     const codex=getCodex();
     const found=LORE_FRAGMENTS.filter(f=>codex[f.id]).length;
@@ -4431,7 +4544,72 @@ function renderRest(){
     btn.classList.toggle('rest-disabled',!avail);
     if(banner)banner.classList.toggle('visible',avail);
 }
-function renderAll(){renderMap();renderHud();renderMessages();renderRest()}
+function renderAll(){renderMap();renderHud();renderMessages();renderRest();renderMinimap()}
+
+// ========== V2 PHASE 4: MINIMAP ==========
+let _minimapOn = false;
+function toggleMinimap(){
+    _minimapOn = !_minimapOn;
+    const el = document.getElementById('minimap');
+    if(el) el.style.display = _minimapOn ? 'block' : 'none';
+    if(_minimapOn) renderMinimap();
+}
+function renderMinimap(){
+    if(!_minimapOn || !game) return;
+    const cv = document.getElementById('minimap');
+    if(!cv) return;
+    const ctx = cv.getContext('2d');
+    const cw = cv.width, ch = cv.height;
+    const sx = cw / MAP_W, sy = ch / MAP_H;
+    ctx.fillStyle = '#000'; ctx.fillRect(0,0,cw,ch);
+    const p = game.player;
+    const blind = hasChallenge('blindfolded');
+    if(blind){
+        ctx.fillStyle='#222'; ctx.fillRect(0,0,cw,ch);
+        ctx.fillStyle='#f55'; ctx.fillRect(Math.floor(p.x*sx), Math.floor(p.y*sy), Math.max(2,sx), Math.max(2,sy));
+        ctx.fillStyle='#555';
+        ctx.font='9px monospace'; ctx.fillText('BLINDFOLDED', 4, ch-4);
+        return;
+    }
+    // Draw revealed tiles
+    for(let y=0;y<MAP_H;y++){
+        for(let x=0;x<MAP_W;x++){
+            const key = y*MAP_W+x;
+            if(!game.revealed.has(key)) continue;
+            const t = game.grid[y][x];
+            let col = '#222';
+            if(t==='#') col = '#3a3a3a';
+            else if(t==='.') col = '#1a1a2a';
+            else if(t==='>') col = '#5ff';
+            else if(t==='$') col = '#fc0';
+            ctx.fillStyle = col;
+            ctx.fillRect(Math.floor(x*sx), Math.floor(y*sy), Math.max(1,Math.ceil(sx)), Math.max(1,Math.ceil(sy)));
+        }
+    }
+    // Special room markers (only for rooms the player has visited)
+    for(const room of game.rooms){
+        if(!room.specialType) continue;
+        const rKey = room.cy*MAP_W + room.cx;
+        if(!game.revealed.has(rKey)) continue;
+        let col = '#f9f';
+        const id = room.specialType.id;
+        if(id==='shrine') col = '#9cf';
+        else if(id==='altar') col = '#f33';
+        else if(id==='shop') col = '#fc0';
+        else if(id==='lore') col = '#fc0';
+        else if(id==='campfire') col = '#f93';
+        ctx.fillStyle = col;
+        const mx = Math.floor(room.cx*sx), my = Math.floor(room.cy*sy);
+        ctx.fillRect(mx-1, my-1, Math.max(3,Math.ceil(sx)+1), Math.max(3,Math.ceil(sy)+1));
+    }
+    // Player position (blinking)
+    ctx.fillStyle = '#5f5';
+    ctx.fillRect(Math.floor(p.x*sx)-1, Math.floor(p.y*sy)-1, Math.max(3,Math.ceil(sx)+2), Math.max(3,Math.ceil(sy)+2));
+    // Floor label
+    ctx.fillStyle = '#888';
+    ctx.font = '9px monospace';
+    ctx.fillText('F'+p.floor, 2, 10);
+}
 
 // ========== ITEM LOGIC ==========
 function applyItem(item,enemy=null){
@@ -5003,7 +5181,7 @@ function renderCombat(){
         <div style="width:100%;height:12px;background:#333;border-radius:3px;margin-top:5px">
             <div style="width:${hpPct}%;height:100%;background:${e.isBoss?'#f5f':e.isElite?'#f93':'#f55'};border-radius:3px;transition:width 0.2s"></div>
         </div>
-        ${e.intent?`<div style="color:#fc0;font-size:11px;margin-top:4px;font-style:italic">⚠ ${e.intent}${(()=>{const eatk=getEffectiveAttack(e);let ed=p.defense;if(hasStatus(p,'shock'))ed=Math.floor(ed*0.75);const lo=Math.max(1,eatk+0-ed),hi=Math.max(1,eatk+4-ed);return ` <span style="color:#f77">(~${lo}-${hi} dmg)</span>`})()}</div>`:''}
+        ${e.intent?(hasChallenge('blindfolded')?`<div style="color:#555;font-size:11px;margin-top:4px;font-style:italic">⚠ ??? (Blindfolded)</div>`:`<div style="color:#fc0;font-size:11px;margin-top:4px;font-style:italic">⚠ ${e.intent}${(()=>{const eatk=getEffectiveAttack(e);let ed=p.defense;if(hasStatus(p,'shock'))ed=Math.floor(ed*0.75);const lo=Math.max(1,eatk+0-ed),hi=Math.max(1,eatk+4-ed);return ` <span style="color:#f77">(~${lo}-${hi} dmg)</span>`})()}</div>`):''}
         ${playerStatusHtml?`<div style="margin-top:4px;font-size:11px">You: ${playerStatusHtml}</div>`:''}`;
     document.getElementById('combat-log').innerHTML=combatLog.slice(-6).map(m=>`<div class="${m.cls?m.cls+'-color':''}">${m.text}</div>`).join('');
 
@@ -5446,6 +5624,7 @@ function tryRest(){
     if(!game)return;
     const p=game.player;
     if(inCombat){return}
+    if(hasChallenge('ironman')){addMsg("Ironman does not rest.",'dim');renderAll();return}
     if(p.className==='Berserker'){addMsg("He does not sit down.",'dim');renderAll();return}
     if(!canRestHere()){
         if(pendingRestRoom&&game.restedRooms.has(game.rooms.indexOf(pendingRestRoom))){
@@ -5526,7 +5705,8 @@ function handleEnemyDefeat(enemy){
     const xpBonusTrinket=getTrinketPassive('xp_bonus');
     if(xpBonusTrinket>0)xp=Math.floor(xp*(1+xpBonusTrinket));
     if(game.currentMutator&&game.currentMutator.effects.xpMult)xp=Math.floor(xp*game.currentMutator.effects.xpMult);
-    if(p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}! ★`,'xp')}
+    if(hasChallenge('pacifist'))xp=0;
+    if(xp>0 && p.gainXp(xp)){sfxLevelUp();addMsg(`★ LEVEL UP! Level ${p.level}! ★`,'xp')}
     // ===== Kill-drop loot system =====
     // Normal enemies: 25% chance to drop a themed item
     // Elite enemies: 100% guaranteed drop (on top of set/trinket roll below)
@@ -6120,10 +6300,14 @@ function handleSpecialChoice(roomId,choiceIdx){
             const stat=pick(['attack','defense','hp']);
             if(stat==='attack'){p.bonusAttack+=3;p.recalcStats();addMsg("Something seeps into your muscles, coiling tight. You feel stronger. ATK +3",'hp')}
             else if(stat==='defense'){p.bonusDefense+=3;p.recalcStats();addMsg("Your skin prickles and hardens. It doesn't feel like a gift. DEF +3",'hp')}
-            else{p.bonusMaxHp+=15;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+15);addMsg("Warmth floods through you — too warm, like a fever. HP +15",'hp')}
+            else{
+                if(hasChallenge('ironman')){p.bonusMaxHp+=15;p.recalcStats();addMsg("Warmth floods through you — max HP +15 (Ironman: no instant heal).",'hp')}
+                else{p.bonusMaxHp+=15;p.recalcStats();p.hp=Math.min(p.maxHp,p.hp+15);addMsg("Warmth floods through you — too warm, like a fever. HP +15",'hp')}
+            }
         } else {
             addNoise(5,'shrine_touch');
-            if(Math.random()<0.5){p.hp=Math.min(p.maxHp,p.hp+Math.floor(p.maxHp*0.5));addMsg("The altar shudders. Your wounds knit shut — the flesh remembers a shape that isn't quite right.",'hp')}
+            if(hasChallenge('ironman')){addMsg("The altar reaches for your wounds — but Ironman rejects the gift.",'dim')}
+            else if(Math.random()<0.5){p.hp=Math.min(p.maxHp,p.hp+Math.floor(p.maxHp*0.5));addMsg("The altar shudders. Your wounds knit shut — the flesh remembers a shape that isn't quite right.",'hp')}
             else{const d=randInt(5,15);p.hp-=d;addMsg(`Something bites back. Pain blooms through your hand. -${d} HP`,'enemy')}
         }
     } else if(roomId==='campfire'){
@@ -6628,9 +6812,16 @@ function awardRunShards(p,victory){
     const kills=p.kills||0;
     let total = floors*5 + bosses*15 + Math.floor(kills*0.4);
     if(victory) total += 100;
+    // Apply challenge multiplier
+    const cm = totalChallengeMult();
+    if(cm!==1) total = Math.floor(total * cm);
     if(total<5) total=5; // pity minimum
     addShards(total);
     showShardToast(total,victory);
+    // Record daily leaderboard entry
+    if(game&&game.seedLabel)recordDailyScore(game.seedLabel,p,victory);
+    // Disable seeded RNG for future runs (safety)
+    disableSeededRng();
     return total;
 }
 function showShardToast(n,victory){
@@ -6997,10 +7188,29 @@ function initClassSelect(){
 
 function selectClass(idx){
     const cls=CHARACTER_CLASSES[idx];
+    // Apply daily seed BEFORE GameState construction so map generation is seeded
+    if(_pendingSeed!==null){enableSeededRng(_pendingSeed)}
+    else{disableSeededRng()}
     game=new GameState(cls);
-    // Apply difficulty modifiers
-    if(_settings.difficulty==='easy'){game.player.maxHp=Math.floor(game.player.maxHp*1.2);game.player.hp=game.player.maxHp;game.player.gold+=30}
-    else if(_settings.difficulty==='hard'){game.player.maxHp=Math.floor(game.player.maxHp*0.8);game.player.hp=game.player.maxHp}
+    // Attach challenge flags + seed label to game state
+    game.challenges = _pendingChallenges || new Set();
+    game.seedLabel  = _pendingSeedLabel || null;
+    // Apply challenge modifiers to the player
+    if(game.challenges.has('fragile')){game.player.maxHp=1;game.player.hp=1;game.player.bonusMaxHp=0}
+    if(game.challenges.has('cursed')){
+        // Apply a persistent curse status with long duration
+        if(typeof applyStatus==='function')applyStatus(game.player,'curse',1,99);
+        if(typeof addMsg==='function')addMsg("A curse settles in your bones.",'enemy');
+    }
+    // Clear pending so next run isn't affected
+    _pendingChallenges = null;
+    _pendingSeed = null;
+    _pendingSeedLabel = null;
+    // Apply difficulty modifiers (after fragile so fragile wins)
+    if(!game.challenges.has('fragile')){
+        if(_settings.difficulty==='easy'){game.player.maxHp=Math.floor(game.player.maxHp*1.2);game.player.hp=game.player.maxHp;game.player.gold+=30}
+        else if(_settings.difficulty==='hard'){game.player.maxHp=Math.floor(game.player.maxHp*0.8);game.player.hp=game.player.maxHp}
+    }
     deleteSave();
     document.getElementById('class-screen').style.display='none';
     document.getElementById('game-container').style.display='block';
@@ -7064,6 +7274,7 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='p')saveGame();
     else if(e.key==='r'){if(canRestHere())tryRest();else openRelics();}
     else if(e.key==='b')openBestiary();
+    else if(e.key==='m')toggleMinimap();
     else if(e.key==='?')openLegend();
 });
 
