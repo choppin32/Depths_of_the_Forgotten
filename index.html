@@ -1350,7 +1350,7 @@ const TRINKETS = [
 
 const CHARACTER_CLASSES = [
     {name:"Knight",hp:40,attack:5,defense:3,stealth:2,ability:"block",abilityName:"Shield Block",abilityDesc:"Halves incoming damage for 2 turns",abilityUses:-1,startingItem:{name:"Steel Shield",type:"armor",value:1,desc:"+1 DEF",slot:"offhand"},detectHidden:0.1,disarmTrap:0.2,desc:"Tanky defender. Beginner-friendly."},
-    {name:"Rogue",hp:25,attack:7,defense:1,stealth:8,ability:"backstab",abilityName:"Backstab",abilityDesc:"2x damage on first attack in combat",abilityUses:-1,startingItem:{name:"Lockpick Set",type:"key",value:1,desc:"Opens locked chests"},detectHidden:0.25,disarmTrap:0.6,desc:"High risk, high reward. Finds secrets."},
+    {name:"Rogue",hp:25,attack:7,defense:1,stealth:8,ability:"backstab",abilityName:"Backstab",abilityDesc:"2x damage — once per combat (sneak attack)",abilityUses:-1,startingItem:{name:"Lockpick Set",type:"key",value:1,desc:"Opens locked chests"},detectHidden:0.25,disarmTrap:0.6,desc:"High risk, high reward. Finds secrets."},
     {name:"Mage",hp:20,attack:4,defense:1,stealth:4,ability:"fireball",abilityName:"Fireball",abilityDesc:"Deals 15+ damage (3 uses/floor)",abilityUses:3,startingItem:{name:"Scroll of Fire",type:"scroll",value:20,desc:"Deals 20 damage"},detectHidden:0.15,disarmTrap:0.1,desc:"Glass cannon. Devastating magic."},
     {name:"Ranger",hp:28,attack:6,defense:2,stealth:6,ability:"scout",abilityName:"Scout",abilityDesc:"Reveals hidden items & trap types",abilityUses:-1,startingItem:{name:"Hunter's Bow",type:"weapon",value:1,desc:"+1 ATK",slot:"weapon"},detectHidden:0.5,disarmTrap:0.35,desc:"Balanced. Best at finding secrets."},
     {name:"Cleric",hp:30,attack:4,defense:2,stealth:3,ability:"heal",abilityName:"Divine Heal",abilityDesc:"Restore 15+ HP (3 uses/floor)",abilityUses:3,startingItem:{name:"Holy Symbol",type:"buff_defense",value:1,desc:"+1 DEF"},detectHidden:0.15,disarmTrap:0.2,desc:"Sustain healer for long runs."},
@@ -5231,7 +5231,10 @@ function renderCombat(){
     if(!e.isBoss)btns+=`<button onclick="combatAction('run')">🏃 Run</button>`;
     const canAbility=p.abilityMaxUses===-1||p.abilityUsesLeft>0;
     if(canAbility){
-        if(p.abilityCooldown>0)btns+=`<button disabled style="opacity:0.3;color:#555">★ ${p.cls.abilityName} (${p.abilityCooldown})</button>`;
+        // Backstab is once per combat — grey it out after it's been used
+        const backstabSpent = p.cls.ability==='backstab' && !p.backstabReady;
+        if(backstabSpent)btns+=`<button disabled style="opacity:0.3;color:#555">★ ${p.cls.abilityName} (used)</button>`;
+        else if(p.abilityCooldown>0)btns+=`<button disabled style="opacity:0.3;color:#555">★ ${p.cls.abilityName} (${p.abilityCooldown})</button>`;
         else btns+=`<button onclick="combatAction('ability')" style="color:#5ff">★ ${p.cls.abilityName}</button>`;
     }
     // Trinket active buttons
@@ -5493,6 +5496,11 @@ function useAbility(enemy){
         return true;
     }
     if(a==='backstab'){
+        // Backstab is a one-shot opener — you can only strike from the shadows once
+        if(!p.backstabReady){
+            combatLog.push({text:"You've already lost the element of surprise.",cls:'dim'});
+            return false;
+        }
         let d=Math.max(1,p.attack*2+randInt(0,4));
         if(getSetBonusLevel('shadow')>=2)d=Math.floor(d*1.15);
         if(enemy.traits&&enemy.traits.some(t=>t.id==='watcher'))d=Math.floor(d*0.75);
