@@ -687,19 +687,20 @@ body {
     }
     #map-display {
         grid-area: map;
-        /* Font size is bounded by BOTH width (50 cols) and height (25 rows)
-           so the map always fits regardless of aspect ratio. */
-        font-size: min(calc((100vw - 220px) / 34), calc((100vh - 90px) / 28), 16px);
-        letter-spacing: 0;
-        line-height: 1.1;
-        padding: 4px;
-        margin: 0;
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        /* Font size bounded by BOTH width and height so the map fits.
+           Letter-spacing kept to preserve aspect ratio of original map. */
+        font-size: min(calc((100vw - 230px) / 52), calc((100vh - 60px) / 26), 18px) !important;
+        letter-spacing: 1px !important;
+        line-height: 1.15 !important;
+        padding: 4px !important;
+        margin: 0 !important;
+        overflow: auto !important;
+        /* Keep block display so white-space: pre newlines render as rows. */
+        display: block !important;
+        text-align: center;
         min-width: 0;
         min-height: 0;
+        box-sizing: border-box;
     }
     #hud { display: none; }
     #messages {
