@@ -1050,6 +1050,11 @@ body {
             <button onclick="saveGame()">Save</button>
             <button onclick="openLegend()">?</button>
         </div>
+        <div id="ingame-volume" style="margin-top:6px;padding:4px 6px;background:#111118;border:1px solid #333;border-radius:3px;font-size:10px;color:#aaa;display:flex;align-items:center;gap:6px">
+            <span style="color:#5ff">🔊</span>
+            <input id="ingame-vol-slider" type="range" min="0" max="100" style="flex:1;min-width:0;accent-color:#5ff" oninput="_settings.volume=this.value/100;saveSettings(_settings);if(typeof setMasterVolume==='function')setMasterVolume(_settings.volume);document.getElementById('ingame-vol-val').textContent=this.value+'%'">
+            <span id="ingame-vol-val" style="min-width:32px;text-align:right;color:#5ff">50%</span>
+        </div>
     </div>
 </div>
 
@@ -6991,8 +6996,15 @@ if(typeof _settings.largeText!=='boolean')_settings.largeText=false;
 function applySettings(){
     if(_settings.largeText)document.body.style.fontSize='15px';else document.body.style.fontSize='';
     if(typeof setMasterVolume==='function')setMasterVolume(_settings.volume);
+    // Sync in-game volume slider to current setting
+    const s=document.getElementById('ingame-vol-slider');
+    const v=document.getElementById('ingame-vol-val');
+    if(s){s.value=Math.round(_settings.volume*100)}
+    if(v){v.textContent=Math.round(_settings.volume*100)+'%'}
 }
 applySettings();
+// Re-sync after DOM is fully parsed (slider lives below the script in some load orders)
+if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',applySettings);
 function showSettingsScreen(){
     let html=`<button class="overlay-close" onclick="document.getElementById('item-screen').style.display='none'">X</button>`;
     html+=`<h2 style="color:#f93">SETTINGS</h2><div style="text-align:left;font-size:12px">`;
