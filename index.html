@@ -5003,7 +5003,7 @@ function movePlayer(dx,dy){
     // Offer rest in naturally empty rooms (no enemies, no shop, no boss)
     if(room&&(!room.enemies||room.enemies.length===0)&&!room.hasShop&&!room.isBossRoom&&!pendingRestRoom){
         const ri=game.rooms.indexOf(room);
-        if(ri>=0&&!game.restedRooms.has(ri)&&game.player.className!=='Berserker'){
+        if(ri>=0&&!game.restedRooms.has(ri)){
             pendingRestRoom=room;
         }
     }
@@ -5664,7 +5664,6 @@ function canRestHere(){
     if(!game||inCombat)return false;
     const p=game.player;
     if(!p||p.isDead())return false;
-    if(p.className==='Berserker')return false;
     const room=game.getCurrentRoom();
     if(!room||!pendingRestRoom||pendingRestRoom!==room)return false;
     const idx=game.rooms.indexOf(room);
@@ -5676,7 +5675,6 @@ function offerRest(room){
     // Called after a combat victory in a room
     if(!game||!room)return;
     const p=game.player;
-    if(p.className==='Berserker'){pendingRestRoom=null;return}
     const idx=game.rooms.indexOf(room);
     if(idx<0||game.restedRooms.has(idx)){pendingRestRoom=null;return}
     // Can't rest with threats still in the room
@@ -5690,7 +5688,6 @@ function tryRest(){
     const p=game.player;
     if(inCombat){return}
     if(hasChallenge('ironman')){addMsg("Ironman does not rest.",'dim');renderAll();return}
-    if(p.className==='Berserker'){addMsg("He does not sit down.",'dim');renderAll();return}
     if(!canRestHere()){
         if(pendingRestRoom&&game.restedRooms.has(game.rooms.indexOf(pendingRestRoom))){
             addMsg("You have already rested here. The room remembers.",'dim');
