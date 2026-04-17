@@ -658,85 +658,113 @@ body {
 }
 
 /* ===== LANDSCAPE MODE ===== */
-@media (orientation: landscape) and (max-height: 500px) {
-    body { overflow-y: hidden; height: 100vh; padding: 2px; }
+/* Broadened trigger: any landscape viewport whose vertical space is limited
+   (phones, tablets, short desktop windows). Uses vh/vw-constrained sizing so
+   both the map and the button sidebar always fit the visible area. */
+@media (orientation: landscape) and (max-height: 800px) {
+    html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+    body { padding: 2px; box-sizing: border-box; }
     #game-container {
         display: grid;
         grid-template-areas:
             "map sidebar"
             "msg sidebar";
-        grid-template-columns: 1fr 180px;
-        grid-template-rows: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) clamp(150px, 24vw, 210px);
+        grid-template-rows: minmax(0, 1fr) auto;
         gap: 3px;
         max-width: 100%;
+        width: 100%;
         height: 100vh;
+        max-height: 100vh;
         overflow: hidden;
+        padding: 0;
+        margin: 0;
+        box-sizing: border-box;
     }
     #map-display {
         grid-area: map;
-        font-size: 10px;
-        letter-spacing: 0px;
+        /* Font size is bounded by BOTH width (50 cols) and height (25 rows)
+           so the map always fits regardless of aspect ratio. */
+        font-size: min(calc((100vw - 220px) / 34), calc((100vh - 90px) / 28), 16px);
+        letter-spacing: 0;
         line-height: 1.1;
-        padding: 3px;
+        padding: 4px;
+        margin: 0;
         overflow: hidden;
-        align-self: stretch;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        min-height: 0;
     }
-    #hud {
-        display: none;
-    }
+    #hud { display: none; }
     #messages {
         grid-area: msg;
-        max-height: 45px;
-        min-height: 30px;
+        max-height: 16vh;
+        min-height: 28px;
         font-size: 10px;
-        padding: 3px;
-        margin-top: 0;
+        padding: 4px;
+        margin: 0;
+        overflow-y: auto;
     }
     #controls {
         grid-area: sidebar;
-        padding: 4px;
-        margin-top: 0;
+        padding: 3px;
+        margin: 0;
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
         justify-content: flex-start;
-        gap: 3px;
+        gap: 4px;
         overflow-y: auto;
+        max-height: 100vh;
+        box-sizing: border-box;
     }
-    /* Show a compact HUD inside the sidebar via a special element */
-    #landscape-hud { display: block !important; }
+    #landscape-hud { display: block !important; font-size: 9px; padding: 3px; }
+    /* D-pad: centered, auto-scaling */
     #dpad {
-        grid-template-columns: 40px 40px 40px;
-        grid-template-rows: 40px 40px;
+        display: grid;
+        grid-template-columns: repeat(3, clamp(28px, 6vh, 40px));
+        grid-template-rows: repeat(2, clamp(28px, 6vh, 40px));
         gap: 2px;
-        margin-bottom: 2px;
-    }
-    #dpad button { font-size: 14px; }
-    #action-buttons {
-        gap: 2px;
-        flex-wrap: wrap;
+        margin: 2px auto;
         justify-content: center;
     }
+    #dpad button { font-size: clamp(11px, 2vh, 14px); padding: 0; }
+    /* Action buttons: 2-col grid so they always fit vertically without clipping */
+    #action-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2px;
+        flex-wrap: unset;
+        justify-content: stretch;
+    }
     #action-buttons button {
-        padding: 6px 8px;
-        font-size: 10px;
+        padding: 5px 4px;
+        font-size: clamp(8px, 1.6vh, 10px);
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 }
 
-@media (orientation: landscape) and (max-height: 380px) {
-    #map-display { font-size: 8px; line-height: 1.0; }
-    #messages { display: none; }
+/* Very short landscape viewports (phones in landscape < 420px tall) —
+   tighten further and hide message log to reclaim space for the map. */
+@media (orientation: landscape) and (max-height: 420px) {
+    #messages { max-height: 10vh; font-size: 9px; }
     #game-container {
-        grid-template-areas: "map sidebar";
-        grid-template-rows: 1fr;
-        grid-template-columns: 1fr 170px;
+        grid-template-columns: minmax(0, 1fr) clamp(140px, 22vw, 180px);
+    }
+    #map-display {
+        font-size: min(calc((100vw - 190px) / 34), calc((100vh - 60px) / 27), 14px);
     }
     #dpad {
-        grid-template-columns: 36px 36px 36px;
-        grid-template-rows: 36px 36px;
+        grid-template-columns: repeat(3, 30px);
+        grid-template-rows: repeat(2, 30px);
     }
-    #dpad button { font-size: 12px; }
-    #action-buttons button { padding: 5px 6px; font-size: 9px; }
+    #dpad button { font-size: 11px; }
+    #action-buttons button { padding: 4px 3px; font-size: 9px; }
 }
 
 /* Landscape HUD (compact, inside controls sidebar) */
