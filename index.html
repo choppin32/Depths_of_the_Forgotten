@@ -658,12 +658,12 @@ body {
 }
 
 /* ===== LANDSCAPE MODE ===== */
-/* Any landscape viewport — phones, tablets, iPads, short desktop windows.
-   Uses vh/vw-constrained sizing so the map and sidebar always fit.
-   Trigger: orientation landscape (wider than tall), no height cap so
-   iPads work. Excluded: very tall desktop windows (>900px) where the
-   portrait layout is fine. */
-@media (orientation: landscape) and (max-height: 900px), (orientation: landscape) and (min-aspect-ratio: 4/3) {
+/* Touch-device landscape (phones/tablets/iPads) OR very short landscape
+   desktop windows. We gate on (hover: none) / (pointer: coarse) so full
+   desktop viewports — which do NOT match those — keep the original
+   centered portrait layout regardless of window aspect ratio. */
+@media (orientation: landscape) and (hover: none) and (pointer: coarse),
+       (orientation: landscape) and (max-height: 600px) {
     html, body { margin: 0 !important; padding: 0 !important; height: 100vh !important; overflow: hidden !important; }
     body { padding: 2px !important; box-sizing: border-box; }
     /* NOTE: !important needed because game-container's display is set inline via JS
